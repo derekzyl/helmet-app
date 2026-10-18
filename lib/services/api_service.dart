@@ -3,13 +3,14 @@ import 'package:http/http.dart' as http;
 import '../models/telemetry_model.dart';
 
 class ApiService {
-  static String baseUrl = 'http://10.0.2.2:8000/api/v1'; // Default emulator host
+  static String baseUrl = 'https://big-mariejeanne-cybergenii-b60e7032.koyeb.app/api/v1';
+  static String wsUrl = 'wss://big-mariejeanne-cybergenii-b60e7032.koyeb.app/api/v1/ws/live';
   static String localIgnitionUrl = 'http://192.168.4.1:8080';
 
-  static Future<TelemetryModel?> getLatestTelemetry({String deviceId = 'HLM-ESP32-001'}) async {
+  static Future<TelemetryModel?> getLatestTelemetry({String deviceId = 'HLM-2026-0001'}) async {
     try {
-      final uri = Uri.parse('$baseUrl/telemetry/latest?device_id=$deviceId');
-      final res = await http.get(uri).timeout(const Duration(seconds: 4));
+      final uri = Uri.parse('$baseUrl/telemetry/latest/$deviceId');
+      final res = await http.get(uri).timeout(const Duration(seconds: 5));
       if (res.statusCode == 200) {
         return TelemetryModel.fromJson(jsonDecode(res.body));
       }
@@ -28,8 +29,8 @@ class ApiService {
 
   static Future<List<SafetyEventModel>> getEvents({int limit = 20}) async {
     try {
-      final uri = Uri.parse('$baseUrl/events?limit=$limit');
-      final res = await http.get(uri).timeout(const Duration(seconds: 4));
+      final uri = Uri.parse('$baseUrl/events/?limit=$limit');
+      final res = await http.get(uri).timeout(const Duration(seconds: 5));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final list = data is List ? data : (data['items'] as List? ?? []);
@@ -41,8 +42,8 @@ class ApiService {
 
   static Future<List<EmergencyContactModel>> getContacts() async {
     try {
-      final uri = Uri.parse('$baseUrl/contacts');
-      final res = await http.get(uri).timeout(const Duration(seconds: 4));
+      final uri = Uri.parse('$baseUrl/contacts/');
+      final res = await http.get(uri).timeout(const Duration(seconds: 5));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final list = data is List ? data : (data['items'] as List? ?? []);
@@ -54,7 +55,7 @@ class ApiService {
 
   static Future<bool> addEmergencyContact(String name, String phone, String rel) async {
     try {
-      final uri = Uri.parse('$baseUrl/contacts');
+      final uri = Uri.parse('$baseUrl/contacts/');
       final res = await http.post(
         uri,
         headers: {'Content-Type': 'application/json'},
