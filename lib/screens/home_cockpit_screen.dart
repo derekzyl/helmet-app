@@ -1,0 +1,592 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
+import '../models/telemetry_model.dart';
+import '../services/api_service.dart';
+import 'breathalyzer_modal.dart';
+import 'pre_ride_check_screen.dart';
+
+class HomeCockpitScreen extends StatefulWidget {
+  const HomeCockpitScreen({super.key});
+
+  @override
+  State<HomeCockpitScreen> createState() => _HomeCockpitScreenState();
+}
+
+class _HomeCockpitScreenState extends State<HomeCockpitScreen> {
+  TelemetryModel? _telemetry;
+  Timer? _pollTimer;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchTelemetry();
+    _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) => _fetchTelemetry());
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _fetchTelemetry() async {
+    final t = await ApiService.getLatestTelemetry();
+    if (mounted) {
+      setState(() {
+        if (t != null) {
+          _telemetry = t;
+        } else {
+          _telemetry ??= TelemetryModel(
+            deviceId: 'HLM-ESP32-001',
+            helmetWorn: true,
+            alcoholDetected: false,
+            bacLevel: 0.012,
+            latitude: 6.5244,
+            longitude: 3.3792,
+            speedKmh: 44.2,
+            batteryPercentage: 92,
+            batteryVoltage: 4.08,
+            impactG: 1.02,
+            tiltDegrees: 4.8,
+            ignitionStatus: 'RUNNING_LATCHED',
+            timestamp: DateTime.now(),
+          );
+        }
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final current = _telemetry ??
+        TelemetryModel(
+          deviceId: 'HLM-ESP32-001',
+          helmetWorn: false,
+          alcoholDetected: false,
+          bacLevel: 0.0,
+          latitude: 6.5244,
+          longitude: 3.3792,
+          speedKmh: 0.0,
+          batteryPercentage: 100,
+          ignitionStatus: 'LOCKED',
+          timestamp: DateTime.now(),
+        );
+
+    final isUnlocked = current.isUnlocked;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text(
+                  'HELM-GUARD',
+                  style: TextStyle(
+                    fontFamily: 'JetBrains Mono',
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.0,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceContainer,
+                    border: Border.all(color: AppColors.outlineVariant),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    'LIVE',
+                    style: TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const Text(
+              'RIDER: TUNDE ADEBAYO (HLM-001)',
+              style: TextStyle(
+                color: AppColors.onSurfaceVariant,
+                fontSize: 10,
+                fontFamily: 'JetBrains Mono',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: AppColors.primary),
+            onPressed: _fetchTelemetry,
+          ),
+        ],
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          : RefreshIndicator(
+              onRefresh: _fetchTelemetry,
+              color: AppColors.primary,
+              backgroundColor: AppColors.surfaceContainer,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Primary Hero Card: Ignition Interlock Status
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceLow,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isUnlocked
+                              ? AppColors.primary.withValues(alpha: 0.4)
+                              : AppColors.error.withValues(alpha: 0.4),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'IGNITION INTERLOCK',
+                                style: TextStyle(
+                                  color: AppColors.outline,
+                                  fontSize: 11,
+                                  fontFamily: 'JetBrains Mono',
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Icon(
+                                isUnlocked ? Icons.lock_open : Icons.lock,
+                                color: isUnlocked ? AppColors.primary : AppColors.error,
+                                size: 18,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Container(
+                                width: 50,
+                                height: 50,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: isUnlocked
+                                      ? AppColors.primaryContainer.withValues(alpha: 0.2)
+                                      : AppColors.errorContainer.withValues(alpha: 0.2),
+                                  border: Border.all(
+                                    color: isUnlocked ? AppColors.primary : AppColors.error,
+                                  ),
+                                ),
+                                child: Icon(
+                                  isUnlocked ? Icons.check_circle_outline : Icons.warning_amber_rounded,
+                                  color: isUnlocked ? AppColors.primary : AppColors.error,
+                                  size: 28,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      current.ignitionStatus,
+                                      style: const TextStyle(
+                                        color: AppColors.onSurface,
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.bold,
+                                        fontFamily: 'JetBrains Mono',
+                                      ),
+                                    ),
+                                    Text(
+                                      isUnlocked
+                                          ? 'SSR Active (Engine Circuit ON)'
+                                          : 'Engine Disabled: Pre-ride check needed',
+                                      style: const TextStyle(
+                                        color: AppColors.onSurfaceVariant,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (current.isRunningLatched) ...[
+                            const SizedBox(height: 12),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceContainer,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: AppColors.outlineVariant),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.shield, color: AppColors.primary, size: 14),
+                                  SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      'ANTI-STALL LATCH ACTIVE: Engine will never be cut mid-ride.',
+                                      style: TextStyle(
+                                        color: AppColors.primary,
+                                        fontSize: 10,
+                                        fontFamily: 'JetBrains Mono',
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                          if (!isUnlocked) ...[
+                            const SizedBox(height: 16),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.primaryContainer,
+                                  foregroundColor: AppColors.onPrimary,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ),
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const PreRideCheckScreen(),
+                                    ),
+                                  );
+                                },
+                                child: const Text(
+                                  'START PRE-RIDE CHECK & UNLOCK',
+                                  style: TextStyle(
+                                    fontFamily: 'JetBrains Mono',
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Speed & Kinematics Gauge
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceLow,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.outlineVariant),
+                      ),
+                      child: Column(
+                        children: [
+                          const Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'REAL-TIME KINEMATICS',
+                                style: TextStyle(
+                                  color: AppColors.outline,
+                                  fontSize: 11,
+                                  fontFamily: 'JetBrains Mono',
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Icon(Icons.speed, color: AppColors.primary, size: 16),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            current.speedKmh.toStringAsFixed(1),
+                            style: const TextStyle(
+                              color: AppColors.onSurface,
+                              fontSize: 56,
+                              fontWeight: FontWeight.w900,
+                              fontFamily: 'JetBrains Mono',
+                              height: 1.0,
+                            ),
+                          ),
+                          const Text(
+                            'KM / H',
+                            style: TextStyle(
+                              color: AppColors.outline,
+                              fontSize: 12,
+                              fontFamily: 'JetBrains Mono',
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surfaceContainer,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'IMPACT FORCE',
+                                        style: TextStyle(
+                                          color: AppColors.outline,
+                                          fontSize: 9,
+                                          fontFamily: 'JetBrains Mono',
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '${(current.impactG ?? 1.0).toStringAsFixed(2)} G',
+                                        style: const TextStyle(
+                                          color: AppColors.onSurface,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                          fontFamily: 'JetBrains Mono',
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surfaceContainer,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'TILT ANGLE',
+                                        style: TextStyle(
+                                          color: AppColors.outline,
+                                          fontSize: 9,
+                                          fontFamily: 'JetBrains Mono',
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '${(current.tiltDegrees ?? 0.0).toStringAsFixed(1)}°',
+                                        style: const TextStyle(
+                                          color: AppColors.onSurface,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                          fontFamily: 'JetBrains Mono',
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Grid: Helmet Presence & Breathalyzer BAC
+                    Row(
+                      children: [
+                        // Card 1: Head Detection
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceLow,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.outlineVariant),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'HELMET IR',
+                                  style: TextStyle(
+                                    color: AppColors.outline,
+                                    fontSize: 10,
+                                    fontFamily: 'JetBrains Mono',
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Icon(
+                                  current.helmetWorn ? Icons.check_circle : Icons.cancel,
+                                  color: current.helmetWorn ? AppColors.primary : AppColors.error,
+                                  size: 28,
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  current.helmetWorn ? 'WORN' : 'REMOVED',
+                                  style: const TextStyle(
+                                    color: AppColors.onSurface,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    fontFamily: 'JetBrains Mono',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(width: 12),
+
+                        // Card 2: MQ-3 Breathalyzer
+                        Expanded(
+                          child: InkWell(
+                            onTap: () {
+                              showModalBottomSheet(
+                                context: context,
+                                isScrollControlled: true,
+                                backgroundColor: Colors.transparent,
+                                builder: (_) => const BreathalyzerModal(),
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceLow,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: AppColors.outlineVariant),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        'ALCOHOL BAC',
+                                        style: TextStyle(
+                                          color: AppColors.outline,
+                                          fontSize: 10,
+                                          fontFamily: 'JetBrains Mono',
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      Icon(Icons.air, color: AppColors.tertiary, size: 14),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    '${current.bacLevel.toStringAsFixed(3)}%',
+                                    style: TextStyle(
+                                      color: current.bacLevel <= 0.05
+                                          ? AppColors.primary
+                                          : AppColors.error,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      fontFamily: 'JetBrains Mono',
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    current.bacLevel <= 0.05 ? 'SOBER (PASS)' : 'FAIL',
+                                    style: const TextStyle(
+                                      color: AppColors.onSurfaceVariant,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Battery & Power
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceLow,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.outlineVariant),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.battery_charging_full, color: AppColors.primary, size: 24),
+                              const SizedBox(width: 12),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'HELMET BATTERY (1S2P LI-ION)',
+                                    style: TextStyle(
+                                      color: AppColors.outline,
+                                      fontSize: 10,
+                                      fontFamily: 'JetBrains Mono',
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${current.batteryPercentage}% (${current.batteryVoltage?.toStringAsFixed(2) ?? '4.05'}V)',
+                                    style: const TextStyle(
+                                      color: AppColors.onSurface,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      fontFamily: 'JetBrains Mono',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceContainer,
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: AppColors.outlineVariant),
+                            ),
+                            child: const Text(
+                              'HEALTHY',
+                              style: TextStyle(
+                                color: AppColors.primary,
+                                fontSize: 10,
+                                fontFamily: 'JetBrains Mono',
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+    );
+  }
+}

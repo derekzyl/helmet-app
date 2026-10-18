@@ -1,30 +1,38 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
 import 'package:app/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('SmartHelmetApp renders navigation and cockpit', (WidgetTester tester) async {
+    // Build app
+    await tester.pumpWidget(const SmartHelmetApp());
+    await tester.pump(const Duration(milliseconds: 500));
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    // Verify app title & navigation items
+    expect(find.text('HELM-GUARD'), findsOneWidget);
+    expect(find.text('Cockpit'), findsOneWidget);
+    expect(find.text('BLE Pair'), findsOneWidget);
+    expect(find.text('Trips'), findsOneWidget);
+    expect(find.text('Alerts'), findsOneWidget);
+    expect(find.text('Settings'), findsOneWidget);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+    // Switch to BLE Pair tab
+    await tester.tap(find.text('BLE Pair'));
     await tester.pump();
+    expect(find.text('Bluetooth LE Pairing'), findsOneWidget);
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    // Switch to Trips tab
+    await tester.tap(find.text('Trips'));
+    await tester.pump();
+    expect(find.text('Trip & Ride History'), findsOneWidget);
+
+    // Switch to Alerts tab
+    await tester.tap(find.text('Alerts'));
+    await tester.pump();
+    expect(find.text('Incident Alerts & SOS'), findsOneWidget);
+
+    // Switch to Settings tab
+    await tester.tap(find.text('Settings'));
+    await tester.pump();
+    expect(find.text('Profile & Settings'), findsOneWidget);
   });
 }
