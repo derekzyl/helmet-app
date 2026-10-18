@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/api_service.dart';
+import '../main.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -32,6 +33,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Profile & Settings'),
@@ -41,37 +44,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Rider Profile Header
+            // Rider Profile Header (Cleaned of dummy names)
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.surfaceLow,
+                color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.outlineVariant),
+                border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
               ),
-              child: const Row(
+              child: Row(
                 children: [
                   CircleAvatar(
                     radius: 24,
-                    backgroundColor: AppColors.surfaceContainer,
-                    child: Icon(Icons.person, color: AppColors.primary),
+                    backgroundColor: Theme.of(context).colorScheme.primary.withAlpha(40),
+                    child: Icon(Icons.shield, color: Theme.of(context).colorScheme.primary),
                   ),
-                  SizedBox(width: 14),
+                  const SizedBox(width: 14),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Tunde Adebayo',
+                        'Fleet Operator',
                         style: TextStyle(
-                          color: AppColors.onSurface,
+                          color: Theme.of(context).colorScheme.onSurface,
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
                         ),
                       ),
                       Text(
-                        'COURIER DISPATCH #04 • HELM-001',
+                        'OPERATOR: hello@cybergenii.com',
                         style: TextStyle(
-                          color: AppColors.onSurfaceVariant,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                           fontSize: 11,
                           fontFamily: 'JetBrains Mono',
                         ),
@@ -84,10 +87,75 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             const SizedBox(height: 24),
 
-            const Text(
+            // Theme & Appearance Switcher
+            Text(
+              'APPEARANCE & THEME',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.outline,
+                fontSize: 11,
+                fontFamily: 'JetBrains Mono',
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        isDark ? Icons.dark_mode : Icons.light_mode,
+                        color: Theme.of(context).colorScheme.primary,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isDark ? 'Dark Theme' : 'Light Theme',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurface,
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            isDark ? 'High-contrast nocturnal cockpit' : 'Daylight high-legibility theme',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  Switch(
+                    value: isDark,
+                    activeThumbColor: Theme.of(context).colorScheme.primary,
+                    onChanged: (val) {
+                      themeModeNotifier.value = val ? ThemeMode.dark : ThemeMode.light;
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            Text(
               'SAFETY INTERLOCK THRESHOLDS',
               style: TextStyle(
-                color: AppColors.outline,
+                color: Theme.of(context).colorScheme.outline,
                 fontSize: 11,
                 fontFamily: 'JetBrains Mono',
                 fontWeight: FontWeight.bold,
@@ -99,9 +167,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.surfaceLow,
+                color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.outlineVariant),
+                border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -109,14 +177,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
+                      Text(
                         'Alcohol Threshold (BAC)',
-                        style: TextStyle(color: AppColors.onSurface, fontSize: 13),
+                        style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 13),
                       ),
                       Text(
                         '${_bacThreshold.toStringAsFixed(3)}%',
-                        style: const TextStyle(
-                          color: AppColors.primary,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
                           fontWeight: FontWeight.bold,
                           fontFamily: 'JetBrains Mono',
                         ),
@@ -128,8 +196,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     min: 0.02,
                     max: 0.08,
                     divisions: 6,
-                    activeColor: AppColors.primary,
-                    inactiveColor: AppColors.surfaceContainer,
+                    activeColor: Theme.of(context).colorScheme.primary,
+                    inactiveColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                     onChanged: (v) => setState(() => _bacThreshold = v),
                   ),
                 ],
@@ -142,9 +210,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.surfaceLow,
+                color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.outlineVariant),
+                border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -152,14 +220,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
+                      Text(
                         'Accident Peak Impact (G)',
-                        style: TextStyle(color: AppColors.onSurface, fontSize: 13),
+                        style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 13),
                       ),
                       Text(
                         '${_impactThreshold.toStringAsFixed(1)} G',
-                        style: const TextStyle(
-                          color: AppColors.primary,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
                           fontWeight: FontWeight.bold,
                           fontFamily: 'JetBrains Mono',
                         ),
@@ -171,8 +239,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     min: 3.0,
                     max: 6.0,
                     divisions: 6,
-                    activeColor: AppColors.primary,
-                    inactiveColor: AppColors.surfaceContainer,
+                    activeColor: Theme.of(context).colorScheme.primary,
+                    inactiveColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                     onChanged: (v) => setState(() => _impactThreshold = v),
                   ),
                 ],
@@ -181,10 +249,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             const SizedBox(height: 24),
 
-            const Text(
+            Text(
               'MAINTENANCE & OVERRIDES',
               style: TextStyle(
-                color: AppColors.outline,
+                color: Theme.of(context).colorScheme.outline,
                 fontSize: 11,
                 fontFamily: 'JetBrains Mono',
                 fontWeight: FontWeight.bold,
@@ -195,33 +263,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.surfaceLow,
+                color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.outlineVariant),
+                border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Roadside Mechanic Override',
                     style: TextStyle(
-                      color: AppColors.onSurface,
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
                     ),
                   ),
                   const SizedBox(height: 4),
-                  const Text(
+                  Text(
                     'Temporarily bypasses interlock for 300 seconds for bench diagnostics. All overrides are logged to security audit trail.',
-                    style: TextStyle(color: AppColors.onSurfaceVariant, fontSize: 11),
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 11),
                   ),
                   const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.surfaceContainer,
-                        foregroundColor: AppColors.error,
+                        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        foregroundColor: Theme.of(context).colorScheme.error,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                       ),
                       onPressed: _triggerMaintenanceOverride,

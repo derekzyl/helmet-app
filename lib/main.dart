@@ -6,6 +6,8 @@ import 'screens/ride_history_screen.dart';
 import 'screens/alerts_screen.dart';
 import 'screens/settings_screen.dart';
 
+final ValueNotifier<ThemeMode> themeModeNotifier = ValueNotifier(ThemeMode.dark);
+
 void main() {
   runApp(const SmartHelmetApp());
 }
@@ -15,11 +17,18 @@ class SmartHelmetApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'HELM-GUARD',
-      theme: AppTheme.darkTheme,
-      debugShowCheckedModeBanner: false,
-      home: const MainNavigationScreen(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeModeNotifier,
+      builder: (context, currentMode, _) {
+        return MaterialApp(
+          title: 'HELM-GUARD',
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: currentMode,
+          debugShowCheckedModeBanner: false,
+          home: const MainNavigationScreen(),
+        );
+      },
     );
   }
 }
@@ -58,15 +67,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             label: 'Cockpit',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.bluetooth),
+            icon: Icon(Icons.bluetooth_searching),
             label: 'BLE Pair',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.history),
+            icon: Icon(Icons.route),
             label: 'Trips',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.notifications_none),
+            icon: Icon(Icons.warning_amber),
             label: 'Alerts',
           ),
           BottomNavigationBarItem(
