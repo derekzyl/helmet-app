@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
+import 'services/api_service.dart';
 import 'screens/home_cockpit_screen.dart';
 import 'screens/ble_pairing_screen.dart';
 import 'screens/ride_history_screen.dart';
@@ -8,7 +9,10 @@ import 'screens/settings_screen.dart';
 
 final ValueNotifier<ThemeMode> themeModeNotifier = ValueNotifier(ThemeMode.dark);
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await ApiService.init();
+  ApiService.connectWebSocket();
   runApp(const SmartHelmetApp());
 }
 
@@ -21,7 +25,7 @@ class SmartHelmetApp extends StatelessWidget {
       valueListenable: themeModeNotifier,
       builder: (context, currentMode, _) {
         return MaterialApp(
-          title: 'HELM-GUARD',
+          title: 'HelmGuard',
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
           themeMode: currentMode,

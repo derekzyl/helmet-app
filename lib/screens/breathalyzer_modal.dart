@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../services/api_service.dart';
 
 class BreathalyzerModal extends StatefulWidget {
   const BreathalyzerModal({super.key});
@@ -23,21 +24,27 @@ class _BreathalyzerModalState extends State<BreathalyzerModal> {
       _isCompleted = false;
     });
 
-    _timer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+    _timer = Timer.periodic(const Duration(milliseconds: 100), (timer) async {
       if (!mounted) {
         timer.cancel();
         return;
       }
-      setState(() {
-        _blowProgress += 0.035;
-        if (_blowProgress >= 1.0) {
-          _blowProgress = 1.0;
-          _isTesting = false;
-          _isCompleted = true;
-          _measuredBac = 0.012; // Simulated sober breath sample
-          timer.cancel();
+      if (_blowProgress >= 1.0) {
+        timer.cancel();
+        final telemetry = await ApiService.getLatestTelemetry();
+        if (mounted) {
+          setState(() {
+            _blowProgress = 1.0;
+            _isTesting = false;
+            _isCompleted = true;
+            _measuredBac = telemetry?.bacLevel ?? 0.000;
+          });
         }
-      });
+      } else {
+        setState(() {
+          _blowProgress += 0.04;
+        });
+      }
     });
   }
 

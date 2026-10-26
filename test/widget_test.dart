@@ -8,7 +8,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
 
     // Verify app title & navigation items
-    expect(find.text('HELM-GUARD'), findsOneWidget);
+    expect(find.text('HELMGUARD'), findsOneWidget);
     expect(find.text('Cockpit'), findsOneWidget);
     expect(find.text('BLE Pair'), findsOneWidget);
     expect(find.text('Trips'), findsOneWidget);

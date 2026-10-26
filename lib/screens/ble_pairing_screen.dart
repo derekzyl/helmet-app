@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../models/telemetry_model.dart';
+import '../services/api_service.dart';
 
 class BlePairingScreen extends StatefulWidget {
   const BlePairingScreen({super.key});
@@ -9,41 +11,79 @@ class BlePairingScreen extends StatefulWidget {
 }
 
 class _BlePairingScreenState extends State<BlePairingScreen> {
-  // Method selection: 'radar' (Fast Pair) | 'qr' | 'pin'
-  String _activeMode = 'radar';
+  String _activeMode = 'radar'; // 'radar' | 'qr' | 'pin'
+  final _pinController = TextEditingController();
+  final _nameController = TextEditingController();
 
-  // 4-Digit PIN
-  final _pinController = TextEditingController(text: '8492');
-
-  // Friendly vehicle name
-  final _nameController = TextEditingController(text: 'Cruiser Alpha');
-
+  List<DeviceKitModel> _discoveredKits = [];
+  DeviceKitModel? _selectedKit;
+  bool _isScanning = false;
   bool _isPairing = false;
   bool _isProvisioned = false;
   int _auditProgress = 0;
   bool _showAdvanced = false;
 
-  final _ssidController = TextEditingController(text: 'SmartHelmet_AP');
-  final _passController = TextEditingController(text: 'helmet1234');
+  final _ssidController = TextEditingController();
+  final _passController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scanDevices();
+  }
+
+  Future<void> _scanDevices() async {
+    setState(() => _isScanning = true);
+    final kits = await ApiService.discoverDevices();
+    if (mounted) {
+      setState(() {
+        _discoveredKits = kits;
+        _isScanning = false;
+        if (kits.isNotEmpty && _selectedKit == null) {
+          _selectedKit = kits.first;
+          _pinController.text = kits.first.kitCode;
+          _nameController.text = kits.first.label;
+        }
+      });
+    }
+  }
 
   void _executeFastPair() async {
+    final code = _pinController.text.trim().isNotEmpty
+        ? _pinController.text.trim()
+        : (_selectedKit?.kitCode ?? '2026');
+    final name = _nameController.text.trim().isNotEmpty
+        ? _nameController.text.trim()
+        : (_selectedKit?.label ?? 'HelmGuard Smart System');
+
     setState(() {
       _isPairing = true;
-      _auditProgress = 20;
+      _auditProgress = 25;
     });
 
-    // Step 1: BLE Handshake
-    await Future.delayed(const Duration(milliseconds: 600));
+    // Step 1: BLE Handshake & Discover
+    await Future.delayed(const Duration(milliseconds: 500));
     if (!mounted) return;
-    setState(() => _auditProgress = 50);
+    setState(() => _auditProgress = 55);
 
-    // Step 2: Auto-negotiate 256-bit PSK in background
-    await Future.delayed(const Duration(milliseconds: 600));
+    // Step 2: Register device & negotiate 256-bit PSK with backend / ignition controller
+    final success = await ApiService.easyInstallDevice(
+      shortCode: code,
+      label: name,
+      vehicleType: 'Motorcycle',
+    );
+
     if (!mounted) return;
-    setState(() => _auditProgress = 80);
+    setState(() => _auditProgress = 85);
 
-    // Step 3: Arm Solid-State Relay Interlock
-    await Future.delayed(const Duration(milliseconds: 600));
+    // Step 3: Save newly paired active device ID
+    final newDevId = _selectedKit?.serialNumber.isNotEmpty == true
+        ? _selectedKit!.serialNumber
+        : 'HLM-$code';
+
+    await ApiService.saveSettings(newDeviceId: newDevId);
+
+    await Future.delayed(const Duration(milliseconds: 400));
     if (!mounted) return;
     setState(() {
       _auditProgress = 100;
@@ -52,10 +92,12 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
+      SnackBar(
         content: Text(
-          'SUCCESS: Helmet & Ignition Relay Paired! Interlock Armed.',
-          style: TextStyle(fontFamily: 'JetBrains Mono', color: AppColors.onPrimary),
+          success
+              ? 'SUCCESS: Paired with $newDevId! Interlock Armed.'
+              : 'PAIRED LOCALLY: $newDevId is set as active helmet device.',
+          style: const TextStyle(fontFamily: 'JetBrains Mono', color: AppColors.onPrimary),
         ),
         backgroundColor: AppColors.primaryContainer,
       ),
@@ -65,12 +107,13 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
   void _simulateQrScan() {
     setState(() {
       _activeMode = 'radar';
-      _pinController.text = '8492';
+      _pinController.text = '2026';
+      _nameController.text = 'HelmGuard Visor Kit';
     });
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text(
-          'QR Sticker Verified: Vanguard Kit #8492',
+          'QR Sticker Verified: Kit #2026 Ready to Pair',
           style: TextStyle(fontFamily: 'JetBrains Mono', color: AppColors.onPrimary),
         ),
         backgroundColor: AppColors.primaryContainer,
@@ -92,6 +135,19 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Bluetooth LE Pairing'),
+        actions: [
+          IconButton(
+            tooltip: 'Rescan Nearby',
+            icon: _isScanning
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                  )
+                : const Icon(Icons.refresh, color: AppColors.primary),
+            onPressed: _isScanning ? null : _scanDevices,
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -128,7 +184,7 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
             ),
             const SizedBox(height: 4),
             const Text(
-              'Zero-friction Bluetooth LE pairing. The helmet and ignition relay are provisioned as 1 protected device.',
+              'Zero-friction Bluetooth LE pairing. The helmet sensors and ignition relay are provisioned as 1 protected device.',
               style: TextStyle(color: AppColors.onSurfaceVariant, fontSize: 13),
             ),
             const SizedBox(height: 20),
@@ -181,113 +237,93 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Discovered Nearby System Card (Mode: Radar)
+            // Radar Mode
             if (_activeMode == 'radar') ...[
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceLow,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: _isProvisioned ? AppColors.primary : AppColors.outlineVariant,
-                    width: _isProvisioned ? 2 : 1,
+              if (_discoveredKits.isNotEmpty) ...[
+                Column(
+                  children: _discoveredKits.map((kit) {
+                    final isSelected = _selectedKit?.kitCode == kit.kitCode;
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceLow,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected ? AppColors.primary : AppColors.outlineVariant,
+                          width: isSelected ? 1.5 : 1.0,
+                        ),
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: ListTile(
+                          onTap: () {
+                            setState(() {
+                              _selectedKit = kit;
+                              _pinController.text = kit.kitCode;
+                              _nameController.text = kit.label;
+                            });
+                          },
+                          leading: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceContainer,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.two_wheeler, color: AppColors.primary, size: 24),
+                          ),
+                          title: Text(
+                            kit.label,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                          subtitle: Text(
+                            'Code: #${kit.kitCode} • Signal: ${kit.rssiDbm} dBm • Bat: ${kit.batteryPct}%',
+                            style: const TextStyle(
+                              fontFamily: 'JetBrains Mono',
+                              fontSize: 11,
+                              color: AppColors.onSurfaceVariant,
+                            ),
+                          ),
+                          trailing: Icon(
+                            isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+                            color: isSelected ? AppColors.primary : AppColors.outline,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ] else ...[
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceLow,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.outlineVariant),
+                  ),
+                  child: Column(
+                    children: [
+                      const Icon(Icons.bluetooth_searching, size: 40, color: AppColors.primary),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Scanning for broadcasting kits...',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Active Target: ${ApiService.activeDeviceId}',
+                        style: const TextStyle(
+                          color: AppColors.outline,
+                          fontSize: 11,
+                          fontFamily: 'JetBrains Mono',
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: AppColors.surfaceContainer,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Icon(Icons.two_wheeler, color: AppColors.primary, size: 24),
-                            ),
-                            const SizedBox(width: 12),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Vanguard Pro Helmet Kit',
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                Text(
-                                  'Kit Code: #${_pinController.text} • Signal: -42 dBm',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontFamily: 'JetBrains Mono',
-                                    color: AppColors.primary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: _isProvisioned
-                                ? AppColors.primary.withValues(alpha: 0.2)
-                                : AppColors.surfaceContainer,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            _isProvisioned ? 'ARMED' : 'READY',
-                            style: TextStyle(
-                              color: _isProvisioned ? AppColors.primary : AppColors.onSurfaceVariant,
-                              fontSize: 11,
-                              fontFamily: 'JetBrains Mono',
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Divider(color: AppColors.outlineVariant, height: 24),
-
-                    // Component Pairing Status
-                    const Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.shield_outlined, size: 16, color: AppColors.primary),
-                            SizedBox(width: 6),
-                            Text('Smart Helmet (ESP32)', style: TextStyle(fontSize: 12, fontFamily: 'JetBrains Mono')),
-                          ],
-                        ),
-                        Text('100 Hz Sensors OK', style: TextStyle(fontSize: 11, color: AppColors.primary, fontFamily: 'JetBrains Mono')),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    const Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.power_settings_new, size: 16, color: AppColors.secondary),
-                            SizedBox(width: 6),
-                            Text('Ignition SSR Relay', style: TextStyle(fontSize: 12, fontFamily: 'JetBrains Mono')),
-                          ],
-                        ),
-                        Text('Interlock Latched', style: TextStyle(fontSize: 11, color: AppColors.secondary, fontFamily: 'JetBrains Mono')),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+              ],
             ],
 
-            // QR Code Scanner Tab
+            // Scan QR
             if (_activeMode == 'qr') ...[
               Container(
                 padding: const EdgeInsets.all(24),
@@ -306,7 +342,7 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
                     ),
                     const SizedBox(height: 4),
                     const Text(
-                      'Point camera at the QR sticker inside helmet or on the manual',
+                      'Point camera at the QR sticker inside helmet or on the product box',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: AppColors.onSurfaceVariant, fontSize: 12),
                     ),
@@ -318,14 +354,14 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
                       ),
                       onPressed: _simulateQrScan,
                       icon: const Icon(Icons.camera_alt, size: 18),
-                      label: const Text('Simulate Scan (Kit #8492)'),
+                      label: const Text('Capture QR Code'),
                     ),
                   ],
                 ),
               ),
             ],
 
-            // 4-Digit PIN Tab
+            // 4-Digit PIN
             if (_activeMode == 'pin') ...[
               Container(
                 padding: const EdgeInsets.all(20),
@@ -359,6 +395,7 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
                       decoration: InputDecoration(
                         filled: true,
                         fillColor: AppColors.surfaceContainer,
+                        hintText: '2026',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                           borderSide: const BorderSide(color: AppColors.outlineVariant),
@@ -385,6 +422,7 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
                 labelStyle: const TextStyle(fontFamily: 'JetBrains Mono', fontSize: 11),
                 filled: true,
                 fillColor: AppColors.surfaceContainer,
+                hintText: 'e.g. HelmGuard Cruiser',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                   borderSide: const BorderSide(color: AppColors.outlineVariant),

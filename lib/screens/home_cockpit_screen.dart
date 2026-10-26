@@ -15,124 +15,169 @@ class HomeCockpitScreen extends StatefulWidget {
 
 class _HomeCockpitScreenState extends State<HomeCockpitScreen> {
   TelemetryModel? _telemetry;
+  StreamSubscription<TelemetryModel>? _wsSubscription;
   Timer? _pollTimer;
   bool _isLoading = true;
+  bool _isWsActive = false;
 
   @override
   void initState() {
     super.initState();
+    _initConnection();
+  }
+
+  void _initConnection() {
     _fetchTelemetry();
-    _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) => _fetchTelemetry());
+
+    // Listen to live WebSocket telemetry stream
+    _wsSubscription = ApiService.telemetryStream.listen(
+      (data) {
+        if (mounted) {
+          setState(() {
+            _telemetry = data;
+            _isLoading = false;
+            _isWsActive = true;
+          });
+        }
+      },
+      onError: (_) {
+        if (mounted) setState(() => _isWsActive = false);
+      },
+    );
+
+    // Fallback polling every 3 seconds to keep data synced if WS drops
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (!_isWsActive || _telemetry == null) {
+        _fetchTelemetry();
+      }
+    });
   }
 
   @override
   void dispose() {
+    _wsSubscription?.cancel();
     _pollTimer?.cancel();
     super.dispose();
   }
 
   Future<void> _fetchTelemetry() async {
-    final t = await ApiService.getLatestTelemetry();
+    final t = await ApiService.getLatestTelemetry(deviceId: ApiService.activeDeviceId);
     if (mounted) {
       setState(() {
         if (t != null) {
           _telemetry = t;
         } else {
-          _telemetry ??= TelemetryModel(
-            deviceId: 'HLM-ESP32-001',
-            helmetWorn: true,
-            alcoholDetected: false,
-            bacLevel: 0.012,
-            latitude: 6.5244,
-            longitude: 3.3792,
-            speedKmh: 44.2,
-            batteryPercentage: 92,
-            batteryVoltage: 4.08,
-            impactG: 1.02,
-            tiltDegrees: 4.8,
-            ignitionStatus: 'RUNNING_LATCHED',
-            timestamp: DateTime.now(),
-          );
+          // Zeroed standby state when disconnected / no data recorded yet
+          _telemetry ??= TelemetryModel.standby(deviceId: ApiService.activeDeviceId);
         }
         _isLoading = false;
+        _isWsActive = ApiService.isWsConnected;
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final current = _telemetry ??
-        TelemetryModel(
-          deviceId: 'HLM-ESP32-001',
-          helmetWorn: false,
-          alcoholDetected: false,
-          bacLevel: 0.0,
-          latitude: 6.5244,
-          longitude: 3.3792,
-          speedKmh: 0.0,
-          batteryPercentage: 100,
-          ignitionStatus: 'LOCKED',
-          timestamp: DateTime.now(),
-        );
-
+    final current = _telemetry ?? TelemetryModel.standby(deviceId: ApiService.activeDeviceId);
     final isUnlocked = current.isUnlocked;
+    final isLive = current.isLive;
 
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: Row(
           children: [
-            Row(
-              children: [
-                const Text(
-                  'HELM-GUARD',
-                  style: TextStyle(
-                    fontFamily: 'JetBrains Mono',
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.0,
-                  ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Image.asset(
+                'assets/images/app_icon.png',
+                width: 32,
+                height: 32,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.shield,
+                  color: AppColors.primary,
+                  size: 26,
                 ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceContainer,
-                    border: Border.all(color: AppColors.outlineVariant),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Text(
-                    'LIVE',
-                    style: TextStyle(
-                      color: AppColors.primary,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
-            const Text(
-              'RIDER: TUNDE ADEBAYO (HLM-001)',
-              style: TextStyle(
-                color: AppColors.onSurfaceVariant,
-                fontSize: 10,
-                fontFamily: 'JetBrains Mono',
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Text(
+                        'HELMGUARD',
+                        style: TextStyle(
+                          fontFamily: 'JetBrains Mono',
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: _isWsActive
+                              ? AppColors.primaryContainer.withValues(alpha: 0.3)
+                              : (isLive ? AppColors.surfaceContainer : AppColors.surfaceHighest),
+                          border: Border.all(
+                            color: _isWsActive
+                                ? AppColors.primary
+                                : (isLive ? AppColors.secondary : AppColors.outline),
+                          ),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          _isWsActive ? 'LIVE WS' : (isLive ? 'LIVE REST' : 'STANDBY'),
+                          style: TextStyle(
+                            color: _isWsActive
+                                ? AppColors.primary
+                                : (isLive ? AppColors.secondary : AppColors.outline),
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'JetBrains Mono',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    'OPERATOR: ${ApiService.riderName.toUpperCase()} (${ApiService.activeDeviceId})',
+                    style: const TextStyle(
+                      color: AppColors.onSurfaceVariant,
+                      fontSize: 10,
+                      fontFamily: 'JetBrains Mono',
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ),
             ),
           ],
         ),
         actions: [
           IconButton(
+            tooltip: 'Sync Live Data',
             icon: const Icon(Icons.refresh, color: AppColors.primary),
-            onPressed: _fetchTelemetry,
+            onPressed: () {
+              setState(() => _isLoading = true);
+              ApiService.reconnectWebSocket();
+              _fetchTelemetry();
+            },
           ),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
           : RefreshIndicator(
-              onRefresh: _fetchTelemetry,
+              onRefresh: () async {
+                ApiService.reconnectWebSocket();
+                await _fetchTelemetry();
+              },
               color: AppColors.primary,
               backgroundColor: AppColors.surfaceContainer,
               child: SingleChildScrollView(
@@ -141,6 +186,48 @@ class _HomeCockpitScreenState extends State<HomeCockpitScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // Standby / Connection info banner if awaiting telemetry
+                    if (!isLive) ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceContainer,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.outlineVariant),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.sensors, color: AppColors.secondary, size: 20),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'AWAITING TELEMETRY PACKET',
+                                    style: TextStyle(
+                                      color: AppColors.onSurface,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      fontFamily: 'JetBrains Mono',
+                                    ),
+                                  ),
+                                  Text(
+                                    'Paired device ${ApiService.activeDeviceId} is in standby. Ignition locked until pre-ride checklist completes.',
+                                    style: const TextStyle(
+                                      color: AppColors.onSurfaceVariant,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
                     // Primary Hero Card: Ignition Interlock Status
                     Container(
                       padding: const EdgeInsets.all(20),
@@ -570,10 +657,10 @@ class _HomeCockpitScreenState extends State<HomeCockpitScreen> {
                               borderRadius: BorderRadius.circular(4),
                               border: Border.all(color: AppColors.outlineVariant),
                             ),
-                            child: const Text(
-                              'HEALTHY',
+                            child: Text(
+                              current.batteryPercentage > 20 ? 'HEALTHY' : 'LOW',
                               style: TextStyle(
-                                color: AppColors.primary,
+                                color: current.batteryPercentage > 20 ? AppColors.primary : AppColors.error,
                                 fontSize: 10,
                                 fontFamily: 'JetBrains Mono',
                                 fontWeight: FontWeight.bold,
