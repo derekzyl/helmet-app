@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'services/api_service.dart';
+import 'services/ble_provision_service.dart';
 import 'screens/home_cockpit_screen.dart';
 import 'screens/ble_pairing_screen.dart';
 import 'screens/ride_history_screen.dart';
@@ -12,6 +13,7 @@ final ValueNotifier<ThemeMode> themeModeNotifier = ValueNotifier(ThemeMode.dark)
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ApiService.init();
+  await BleProvisionService.init();
   ApiService.connectWebSocket();
   runApp(const SmartHelmetApp());
 }
