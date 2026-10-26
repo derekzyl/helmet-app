@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:app/main.dart';
+import 'package:helmguard/main.dart';
 
 void main() {
   testWidgets('SmartHelmetApp renders navigation and cockpit', (WidgetTester tester) async {

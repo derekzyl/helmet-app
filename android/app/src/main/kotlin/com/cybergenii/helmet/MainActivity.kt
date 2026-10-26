@@ -1,4 +1,4 @@
-package com.example.app
+package com.cybergenii.helmet
 
 import io.flutter.embedding.android.FlutterActivity
 

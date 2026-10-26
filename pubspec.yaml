@@ -1,5 +1,5 @@
-name: app
-description: "Smart Helmet & Ignition Control Flutter Mobile App"
+name: helmguard
+description: "HelmGuard - Smart Helmet & Motorcycle Ignition Safety App by Cybergenii"
 publish_to: 'none'
 
 version: 1.0.0+1
@@ -23,3 +23,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/images/
