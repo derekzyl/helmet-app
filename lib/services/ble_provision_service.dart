@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -299,6 +300,66 @@ class BleProvisionService {
     await Future<void>.delayed(const Duration(milliseconds: 80));
   }
 
+  /// Android status 133 is usually "stack busy / connect-too-soon-after-scan".
+  /// Stop scan, settle, clear GATT cache, retry with backoff.
+  static Future<void> _connectWithRetries(
+    BluetoothDevice device, {
+    void Function(String step)? onStep,
+    int maxAttempts = 3,
+  }) async {
+    await stopScan();
+    await Future<void>.delayed(const Duration(milliseconds: 1200));
+
+    Object? lastError;
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      final label = device.platformName.isNotEmpty
+          ? device.platformName
+          : device.remoteId.str;
+      onStep?.call('Connecting to $label (attempt $attempt/$maxAttempts)…');
+      try {
+        if (device.isConnected) {
+          await device.disconnect();
+          await Future<void>.delayed(const Duration(milliseconds: 500));
+        }
+        if (Platform.isAndroid) {
+          try {
+            await device.clearGattCache();
+          } catch (_) {}
+        }
+        await device.connect(
+          timeout: const Duration(seconds: 20),
+          autoConnect: false,
+        );
+        await device.connectionState
+            .firstWhere((s) => s == BluetoothConnectionState.connected)
+            .timeout(const Duration(seconds: 20));
+        try {
+          await device.requestMtu(185);
+        } catch (_) {}
+        return;
+      } catch (e) {
+        lastError = e;
+        final msg = e.toString().toLowerCase();
+        final is133 = msg.contains('133') ||
+            msg.contains('android_specific') ||
+            msg.contains('status:');
+        onStep?.call(
+          is133
+              ? 'Android GATT 133 — waiting then retry…'
+              : 'Connect failed — retrying…',
+        );
+        try {
+          await device.disconnect();
+        } catch (_) {}
+        await Future<void>.delayed(Duration(milliseconds: 900 * attempt));
+      }
+    }
+    throw Exception(
+      'BLE connect failed after $maxAttempts tries (often Android status 133). '
+      'Power-cycle the board, wait 2s, Scan again. Last: $lastError',
+    );
+  }
+
   static Future<void> provisionDevice({
     required BluetoothDevice device,
     required ProvDeviceKind kind,
@@ -308,10 +369,7 @@ class BleProvisionService {
     required String pairedPeerId,
     void Function(String step)? onStep,
   }) async {
-    onStep?.call(
-      'Connecting to ${device.platformName.isNotEmpty ? device.platformName : device.remoteId.str}…',
-    );
-    await device.connect(timeout: const Duration(seconds: 15), autoConnect: false);
+    await _connectWithRetries(device, onStep: onStep);
     try {
       onStep?.call('Discovering GATT…');
       final services = await device.discoverServices();
@@ -339,12 +397,13 @@ class BleProvisionService {
       onStep?.call('Committing (device will reboot)…');
       final statusChar = charOf(BleProvisionUuids.status);
       await statusChar.write(Uint8List.fromList([1]), withoutResponse: false);
-      await Future<void>.delayed(const Duration(milliseconds: 600));
+      await Future<void>.delayed(const Duration(milliseconds: 800));
       onStep?.call(kind == ProvDeviceKind.helmet ? 'Helmet provisioned' : 'Ignition provisioned');
     } finally {
       try {
         await device.disconnect();
       } catch (_) {}
+      await Future<void>.delayed(const Duration(milliseconds: 600));
     }
   }
 
@@ -384,12 +443,13 @@ class BleProvisionService {
     );
     onProgress?.call(55);
 
-    await Future<void>.delayed(const Duration(milliseconds: 400));
+    // Let Android GATT stack settle between two ESP connects (avoids 133).
+    await Future<void>.delayed(const Duration(seconds: 2));
 
     onStep?.call(
       ignitionSsid == softApOnlySsid
-          ? 'Ignition → SoftAP peer (no home uplink)…'
-          : 'Ignition → SoftAP peer + home Wi‑Fi "$ignitionSsid" for cloud…',
+          ? 'Ignition → SoftAP peer only (offline; no cloud until home/phone-hotspot SSID)…'
+          : 'Ignition → SoftAP peer + STA "$ignitionSsid" (home or phone hotspot) for cloud…',
     );
     await provisionDevice(
       device: ignition.device,
@@ -412,7 +472,9 @@ class BleProvisionService {
     );
     onProgress?.call(100);
     onStep?.call(
-      'Paired. Phone stays on home Wi‑Fi; helmet↔ignition SoftAP is offline-only.',
+      ignitionSsid == softApOnlySsid
+          ? 'Paired offline. Helmet↔ignition SoftAP only; re-pair with home/phone-hotspot SSID for cloud.'
+          : 'Paired. Phone stays on "$ignitionSsid"; SoftAP is helmet↔ignition only; live sensors via cloud.',
     );
   }
 }

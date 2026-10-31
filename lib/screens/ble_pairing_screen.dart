@@ -28,7 +28,8 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
   bool _softApOnly = false;
   bool _showAdvanced = false;
   int _progress = 0;
-  String _statusLine = 'Power both boards. LEDs blink while connecting / pairing.';
+  String _statusLine =
+      'BLE pairs credentials only. SoftAP = helmet↔ignition. Home or phone hotspot = cloud uplink.';
   String _auditStep = '';
 
   @override
@@ -294,7 +295,6 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
             ),
             const SizedBox(height: 12),
 
-            // LED legend
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -306,6 +306,36 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
+                    'HOW LINKS WORK',
+                    style: TextStyle(
+                      fontFamily: 'JetBrains Mono',
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.outline,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    '1) SoftAP always: helmet ↔ ignition offline safety (phone never joins SoftAP).',
+                    style: TextStyle(fontSize: 11, fontFamily: 'JetBrains Mono'),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    '2) BLE: one-time pair only (IDs + Wi‑Fi). Not for live sensor streaming.',
+                    style: TextStyle(fontSize: 11, fontFamily: 'JetBrains Mono'),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    '3) Home Wi‑Fi or phone hotspot: ignition STA → cloud; app stays on that network.',
+                    style: TextStyle(fontSize: 11, fontFamily: 'JetBrains Mono'),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    '4) SoftAP-only: boards work offline; no cloud until you re-pair with an SSID.',
+                    style: TextStyle(fontSize: 11, fontFamily: 'JetBrains Mono'),
+                  ),
+                  SizedBox(height: 10),
+                  Text(
                     'LED MEANINGS',
                     style: TextStyle(
                       fontFamily: 'JetBrains Mono',
@@ -315,10 +345,10 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
                     ),
                   ),
                   SizedBox(height: 8),
-                  Text('Helmet: yellow blink = Wi-Fi / BLE attempt · Y+R alt = SoftAP scan · green = link OK',
+                  Text('Helmet: yellow blink = Wi-Fi / BLE · Y+R alt = SoftAP scan · green = link OK',
                       style: TextStyle(fontSize: 11, fontFamily: 'JetBrains Mono')),
                   SizedBox(height: 4),
-                  Text('Ignition: red blink = Wi-Fi try · green blink = SoftAP wait · G/R alt = BLE pair · solid = safety state',
+                  Text('Ignition: red blink = Wi-Fi try · green blink = SoftAP wait · G/R alt = BLE · solid = safety',
                       style: TextStyle(fontSize: 11, fontFamily: 'JetBrains Mono')),
                 ],
               ),
@@ -449,9 +479,9 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
               child: SwitchListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                 tileColor: AppColors.surfaceLow,
-                title: const Text('Offline SoftAP only (no home Wi‑Fi)', style: TextStyle(fontSize: 14)),
+                title: const Text('Offline SoftAP only (no cloud uplink)', style: TextStyle(fontSize: 14)),
                 subtitle: const Text(
-                  'OFF (recommended): SoftAP peer + home Wi‑Fi on ignition. Phone stays on home Wi‑Fi; motion reaches cloud.',
+                  'OFF (recommended): SoftAP peer + ignition joins home Wi‑Fi or your phone hotspot. Phone stays there; sensors sync via cloud.',
                   style: TextStyle(fontSize: 11, color: AppColors.onSurfaceVariant),
                 ),
                 value: _softApOnly,
@@ -492,16 +522,20 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
               TextField(
                 controller: _ssidController,
                 decoration: const InputDecoration(
-                  labelText: 'Home Wi‑Fi SSID (phone stays here)',
+                  labelText: 'Uplink SSID (home Wi‑Fi or phone hotspot)',
                   filled: true,
-                  helperText: 'Ignition joins this for cloud. SoftAP peer stays offline between boards.',
+                  helperText:
+                      'Ignition STA joins this for cloud. SoftAP stays helmet↔ignition only. Phone should be on the same network.',
                 ),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: _passController,
                 obscureText: true,
-                decoration: const InputDecoration(labelText: 'Home Wi‑Fi Password', filled: true),
+                decoration: const InputDecoration(
+                  labelText: 'Uplink Wi‑Fi password',
+                  filled: true,
+                ),
               ),
             ],
             InkWell(

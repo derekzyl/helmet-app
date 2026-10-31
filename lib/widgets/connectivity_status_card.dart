@@ -109,10 +109,10 @@ class ConnectivityStatusCard extends StatelessWidget {
             helmetCloud ? 'UPLOADING' : 'NOT UPLOADING',
             helmetCloud,
             subtitle: helmetCloud
-                ? 'Ignition home Wi‑Fi forwarding live MPU/PIR/MQ-3'
+                ? 'Ignition STA (home / phone hotspot) forwarding live MPU/PIR/MQ-3'
                 : peerOk
-                    ? 'Peer OK offline — provision home Wi‑Fi on ignition for cloud sensors (phone stays home)'
-                    : 'No peer SoftAP / no home uplink',
+                    ? 'Peer OK offline — set home or phone-hotspot SSID on ignition for cloud'
+                    : 'No peer SoftAP / no uplink',
           ),
           const SizedBox(height: 8),
           _row(
@@ -121,7 +121,7 @@ class ConnectivityStatusCard extends StatelessWidget {
             appCloud ? 'ONLINE' : 'OFFLINE',
             appCloud,
             subtitle: appCloud
-                ? 'Keep phone on home Wi‑Fi — do not join SH-IGN-* SoftAP'
+                ? 'Stay on home Wi‑Fi or your hotspot — never join SH-IGN-* SoftAP'
                 : 'Check phone internet / API URL',
           ),
           if (telemetry.wifiMode.isNotEmpty) ...[
