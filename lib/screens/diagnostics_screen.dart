@@ -15,7 +15,9 @@ class DiagnosticsScreen extends StatefulWidget {
 class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
   TelemetryModel? _t;
   StreamSubscription? _sub;
+  Timer? _poll;
   bool _running = false;
+  bool _softApReachable = false;
   final List<String> _log = [];
 
   @override
@@ -25,19 +27,23 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
     _sub = ApiService.telemetryStream.listen((d) {
       if (mounted) setState(() => _t = d);
     });
+    _poll = Timer.periodic(const Duration(seconds: 1), (_) => _refresh());
   }
 
   @override
   void dispose() {
     _sub?.cancel();
+    _poll?.cancel();
     super.dispose();
   }
 
   Future<void> _refresh() async {
     final t = await ApiService.getLatestTelemetry(deviceId: ApiService.activeDeviceId);
-    if (mounted) {
-      setState(() => _t = t ?? TelemetryModel.standby(deviceId: ApiService.activeDeviceId));
-    }
+    if (!mounted) return;
+    setState(() {
+      _t = t ?? TelemetryModel.standby(deviceId: ApiService.activeDeviceId);
+      _softApReachable = t?.isLive == true && (t?.wifiMode == 'SOFTAP' || t?.localLinkConnected == true);
+    });
   }
 
   Future<void> _runFullDiagnosis() async {
@@ -95,6 +101,25 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: t.isLive
+                  ? AppColors.primaryContainer.withValues(alpha: 0.15)
+                  : AppColors.error.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: t.isLive ? AppColors.primary.withValues(alpha: 0.4) : AppColors.error.withValues(alpha: 0.4),
+              ),
+            ),
+            child: Text(
+              t.isLive
+                  ? 'LIVE sensors (${_softApReachable ? "SoftAP" : "fresh cloud"}). Wave IR 1s / shake MPU / MQ-3 — values below should move.'
+                  : 'NOT LIVE — cloud cache or no SoftAP. Join Wi‑Fi SH-IGN-* (pass helmet1234), flash latest firmware, then reopen Diag. GPS needs sky or helmet serial: SIM',
+              style: const TextStyle(fontFamily: 'JetBrains Mono', fontSize: 11, height: 1.35),
+            ),
+          ),
+          const SizedBox(height: 12),
           ConnectivityStatusCard(telemetry: t, cloudWsLive: ApiService.isWsConnected),
           const SizedBox(height: 16),
           ElevatedButton.icon(
