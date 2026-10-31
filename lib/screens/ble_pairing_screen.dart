@@ -23,7 +23,9 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
   bool _isPairing = false;
   bool _isProvisioned = false;
   bool _autoConnect = true;
-  bool _softApOnly = true; // peer SoftAP after handshake — no phone Wi‑Fi required
+  /// When true: SoftAP peer only (no home uplink). When false: SoftAP peer + home Wi‑Fi
+  /// on ignition so the phone stays on home Wi‑Fi and still gets live sensors via cloud.
+  bool _softApOnly = false;
   bool _showAdvanced = false;
   int _progress = 0;
   String _statusLine = 'Power both boards. LEDs blink while connecting / pairing.';
@@ -126,11 +128,21 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
       return;
     }
 
+    if (!_softApOnly && _ssidController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Enter home Wi‑Fi SSID (phone stays on it). Or enable SoftAP-only for offline.',
+            style: TextStyle(fontFamily: 'JetBrains Mono'),
+          ),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
     final ssid = _softApOnly
         ? BleProvisionService.softApOnlySsid
-        : (_ssidController.text.trim().isEmpty
-            ? 'SmartHelmet_AP'
-            : _ssidController.text.trim());
+        : _ssidController.text.trim();
     final pass = _softApOnly
         ? BleProvisionService.defaultWifiPass
         : (_passController.text.trim().isEmpty
@@ -157,6 +169,7 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
         pass: pass,
         helmetId: helmetId,
         ignitionId: ignitionId,
+        peerSoftApPlusHomeUplink: true,
         onStep: (s) {
           if (!mounted) return;
           setState(() => _auditStep = s);
@@ -436,9 +449,9 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
               child: SwitchListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                 tileColor: AppColors.surfaceLow,
-                title: const Text('Peer SoftAP (no phone Wi‑Fi)', style: TextStyle(fontSize: 14)),
+                title: const Text('Offline SoftAP only (no home Wi‑Fi)', style: TextStyle(fontSize: 14)),
                 subtitle: const Text(
-                  'After pairing, helmet ↔ ignition talk directly. Ignition works offline.',
+                  'OFF (recommended): SoftAP peer + home Wi‑Fi on ignition. Phone stays on home Wi‑Fi; motion reaches cloud.',
                   style: TextStyle(fontSize: 11, color: AppColors.onSurfaceVariant),
                 ),
                 value: _softApOnly,
@@ -447,7 +460,7 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
                     ? null
                     : (v) => setState(() {
                           _softApOnly = v;
-                          _showAdvanced = !v;
+                          _showAdvanced = true;
                         }),
               ),
             ),
@@ -460,7 +473,7 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
                 tileColor: AppColors.surfaceLow,
                 title: const Text('Default auto-connect', style: TextStyle(fontSize: 14)),
                 subtitle: const Text(
-                  'Boards reconnect SoftAP / Wi‑Fi after reboot',
+                  'Boards reconnect SoftAP / home Wi‑Fi after reboot',
                   style: TextStyle(fontSize: 11, color: AppColors.onSurfaceVariant),
                 ),
                 value: _autoConnect,
@@ -474,12 +487,29 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
               ),
             ),
 
+            if (!_softApOnly) ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _ssidController,
+                decoration: const InputDecoration(
+                  labelText: 'Home Wi‑Fi SSID (phone stays here)',
+                  filled: true,
+                  helperText: 'Ignition joins this for cloud. SoftAP peer stays offline between boards.',
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _passController,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'Home Wi‑Fi Password', filled: true),
+              ),
+            ],
             InkWell(
               onTap: () => setState(() => _showAdvanced = !_showAdvanced),
               child: Row(
                 children: [
                   Text(
-                    _showAdvanced ? 'Hide Wi-Fi / IDs' : 'Wi-Fi & device IDs',
+                    _showAdvanced ? 'Hide device IDs' : 'Device IDs',
                     style: const TextStyle(fontSize: 11, color: AppColors.outline, fontFamily: 'JetBrains Mono'),
                   ),
                   Icon(_showAdvanced ? Icons.expand_less : Icons.expand_more, size: 16, color: AppColors.outline),
@@ -488,21 +518,6 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
             ),
             if (_showAdvanced) ...[
               const SizedBox(height: 12),
-              TextField(
-                controller: _ssidController,
-                decoration: const InputDecoration(
-                  labelText: 'Shared Wi-Fi SSID (optional cloud monitoring)',
-                  filled: true,
-                  helperText: 'Only needed if Peer SoftAP is OFF. SoftAP peer works without this.',
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _passController,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: 'Wi-Fi Password', filled: true),
-              ),
-              const SizedBox(height: 8),
               TextField(
                 controller: _helmetIdController,
                 decoration: const InputDecoration(labelText: 'Helmet Device ID', filled: true),

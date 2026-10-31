@@ -356,18 +356,28 @@ class BleProvisionService {
     String? psk,
     String helmetId = defaultHelmetId,
     String ignitionId = defaultIgnitionId,
+    /// When true: helmet uses SoftAP peer only; ignition SoftAP + home Wi‑Fi STA uplink.
+    bool peerSoftApPlusHomeUplink = true,
     void Function(String step)? onStep,
     void Function(int progress)? onProgress,
   }) async {
     final secret = (psk == null || psk.isEmpty) ? generatePsk() : psk;
     await stopScan();
 
+    // Helmet always joins ignition SoftAP for offline interlock (never needs home Wi‑Fi).
+    final helmetSsid = peerSoftApPlusHomeUplink ? softApOnlySsid : ssid;
+    final helmetPass = peerSoftApPlusHomeUplink ? defaultWifiPass : pass;
+    // Ignition: SoftAP always + home Wi‑Fi STA when ssid is a real network (not SoftAP sentinel).
+    final ignitionSsid = ssid;
+    final ignitionPass = pass;
+
     onProgress?.call(10);
+    onStep?.call('Helmet → SoftAP peer only (offline link)…');
     await provisionDevice(
       device: helmet.device,
       kind: ProvDeviceKind.helmet,
-      ssid: ssid,
-      pass: pass,
+      ssid: helmetSsid,
+      pass: helmetPass,
       psk: secret,
       pairedPeerId: ignitionId,
       onStep: onStep,
@@ -376,11 +386,16 @@ class BleProvisionService {
 
     await Future<void>.delayed(const Duration(milliseconds: 400));
 
+    onStep?.call(
+      ignitionSsid == softApOnlySsid
+          ? 'Ignition → SoftAP peer (no home uplink)…'
+          : 'Ignition → SoftAP peer + home Wi‑Fi "$ignitionSsid" for cloud…',
+    );
     await provisionDevice(
       device: ignition.device,
       kind: ProvDeviceKind.ignition,
-      ssid: ssid,
-      pass: pass,
+      ssid: ignitionSsid,
+      pass: ignitionPass,
       psk: secret,
       pairedPeerId: helmetId,
       onStep: onStep,
@@ -388,14 +403,16 @@ class BleProvisionService {
     onProgress?.call(90);
 
     await persistCredentials(
-      ssid: ssid,
-      pass: pass,
+      ssid: ignitionSsid,
+      pass: ignitionPass,
       psk: secret,
       helmetId: helmetId,
       ignitionId: ignitionId,
       auto: true,
     );
     onProgress?.call(100);
-    onStep?.call('Both devices paired. They will auto-connect on reboot.');
+    onStep?.call(
+      'Paired. Phone stays on home Wi‑Fi; helmet↔ignition SoftAP is offline-only.',
+    );
   }
 }
