@@ -98,10 +98,8 @@ class _PreRideCheckScreenState extends State<PreRideCheckScreen> {
     return impact < 3.5 && tilt < 60.0 && !t.imuAnomaly && t.imuState != 'CRASH' && t.imuState != 'PRE_ALERT';
   }
 
-  bool get _step5Battery => _telemetry.batteryPercentage >= 15;
-
   bool get _allPassed =>
-      _step1Link && _step2Worn && _step3Alcohol && _step4Imu && _step5Battery;
+      _step1Link && _step2Worn && _step3Alcohol && _step4Imu;
 
   Future<void> _triggerUnlock() async {
     if (!_allPassed || _isAuthorizing) return;
@@ -177,7 +175,7 @@ class _PreRideCheckScreenState extends State<PreRideCheckScreen> {
           ),
         ],
       ),
-      body: _isLoading && t.isLive == false && t.batteryPercentage == 0
+      body: _isLoading && !t.isLive && !t.helmetWorn && !t.localLinkConnected
           ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
@@ -196,7 +194,7 @@ class _PreRideCheckScreenState extends State<PreRideCheckScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Engine unlock requires all 5 conditions on ${ApiService.activeDeviceId}',
+                    'Engine unlock requires all 4 conditions on ${ApiService.activeDeviceId}',
                     style: const TextStyle(color: AppColors.onSurfaceVariant, fontSize: 13),
                   ),
                   const SizedBox(height: 8),
@@ -255,15 +253,6 @@ class _PreRideCheckScreenState extends State<PreRideCheckScreen> {
                         : 'Fix posture / clear IMU anomaly (tilt ${(t.tiltDegrees ?? 0).toStringAsFixed(1)}°)',
                     passed: _step4Imu,
                     icon: Icons.screen_rotation,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildCheckItem(
-                    title: '5. Helmet Battery Health',
-                    subtitle: _step5Battery
-                        ? 'Battery ${t.batteryPercentage}%'
-                        : 'Battery ${t.batteryPercentage}% — need ≥ 15%',
-                    passed: _step5Battery,
-                    icon: Icons.battery_charging_full,
                   ),
                   const SizedBox(height: 28),
 
@@ -334,7 +323,6 @@ class _PreRideCheckScreenState extends State<PreRideCheckScreen> {
     if (!_step2Worn) fails.add('wear helmet');
     if (!_step3Alcohol) fails.add('alcohol');
     if (!_step4Imu) fails.add('tilt/IMU');
-    if (!_step5Battery) fails.add('battery');
     return fails.isEmpty ? 'Refreshing…' : 'Still needed: ${fails.join(", ")}';
   }
 

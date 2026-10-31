@@ -73,9 +73,7 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
     step(t.gpsFixed || (t.latitude.abs() + t.longitude.abs()) > 0.01
         ? 'PASS GPS / last fix'
         : 'WARN No GPS fix');
-    step(t.batteryPercentage >= 15
-        ? 'PASS Battery ${t.batteryPercentage}%'
-        : 'FAIL Low battery');
+    step('INFO Battery ${t.batteryPercentage}% (not gated)');
     step(t.internetOk || ApiService.isWsConnected
         ? 'INFO Internet / cloud online'
         : 'INFO Offline — local interlock still active');

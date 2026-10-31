@@ -38,12 +38,14 @@ class ProvScanHit {
 class BleProvisionService {
   static const String helmetAdv = 'SH-HLM-PROV';
   static const String ignitionAdv = 'SH-IGN-PROV';
-  /// SoftAP-only sentinel — boards talk peer-to-peer without phone Wi‑Fi
   static const String softApOnlySsid = '__SOFTAP__';
   static const String defaultWifiSsid = softApOnlySsid;
   static const String defaultWifiPass = 'helmet1234';
   static const String defaultHelmetId = 'HLM-2026-0001';
   static const String defaultIgnitionId = 'IGN-2026-0001';
+
+  /// Android rejects scans started too soon after the previous one (status=6).
+  static const Duration scanCooldown = Duration(seconds: 8);
 
   static String wifiSsid = defaultWifiSsid;
   static String wifiPass = defaultWifiPass;
@@ -54,6 +56,8 @@ class BleProvisionService {
 
   static StreamSubscription<List<ScanResult>>? _scanSub;
   static final Map<String, ProvScanHit> _hits = {};
+  static DateTime? _lastScanStopAt;
+  static bool _scanInFlight = false;
 
   static Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
@@ -103,7 +107,6 @@ class BleProvisionService {
     }
   }
 
-  /// 64 hex chars = 256-bit PSK matching firmware DEFAULT_PAIRING_PSK format.
   static String generatePsk() {
     final rng = Random.secure();
     final bytes = List<int>.generate(32, (_) => rng.nextInt(256));
@@ -117,6 +120,24 @@ class BleProvisionService {
     return ProvDeviceKind.unknown;
   }
 
+  static bool _isProvAdvertisement(ScanResult r, String name) {
+    final upper = name.toUpperCase();
+    if (upper.contains('SH-HLM-PROV') ||
+        upper.contains('SH-IGN-PROV') ||
+        upper.contains('HLM-PROV') ||
+        upper.contains('IGN-PROV') ||
+        upper.contains('SH-HLM') ||
+        upper.contains('SH-IGN')) {
+      return true;
+    }
+    // Name sometimes empty on Android — match by provisioning service UUID
+    for (final u in r.advertisementData.serviceUuids) {
+      final s = u.str128.toUpperCase();
+      if (s.contains('0000FE20')) return true;
+    }
+    return false;
+  }
+
   static Future<bool> ensurePermissions() async {
     if (await FlutterBluePlus.isSupported == false) return false;
 
@@ -126,67 +147,145 @@ class BleProvisionService {
       Permission.locationWhenInUse,
     ].request();
 
-    final bleOk = (statuses[Permission.bluetoothScan]?.isGranted ?? false) ||
-        (statuses[Permission.bluetoothConnect]?.isGranted ?? false);
+    final scanOk = statuses[Permission.bluetoothScan]?.isGranted ?? false;
+    final connectOk = statuses[Permission.bluetoothConnect]?.isGranted ?? false;
     final locOk = statuses[Permission.locationWhenInUse]?.isGranted ?? false;
-    // Older Android needs location for BLE scan; newer often only BLE perms.
-    return bleOk || locOk;
+    // Android 12+ needs SCAN+CONNECT; older needs location for LE scan.
+    return (scanOk && connectOk) || locOk;
+  }
+
+  static Future<void> _respectCooldown({void Function(String)? onWait}) async {
+    final last = _lastScanStopAt;
+    if (last == null) return;
+    final elapsed = DateTime.now().difference(last);
+    final remaining = scanCooldown - elapsed;
+    if (remaining > Duration.zero) {
+      onWait?.call(
+        'Bluetooth cooldown ${remaining.inSeconds + 1}s (Android rate limit)…',
+      );
+      await Future<void>.delayed(remaining);
+    }
   }
 
   static Future<void> startScan({
     required void Function(List<ProvScanHit> hits) onUpdate,
-    Duration timeout = const Duration(seconds: 12),
+    void Function(String status)? onStatus,
+    Duration timeout = const Duration(seconds: 15),
   }) async {
-    await stopScan();
-    _hits.clear();
-    onUpdate([]);
-
-    final ok = await ensurePermissions();
-    if (!ok) {
-      throw Exception('Bluetooth / location permission denied');
+    if (_scanInFlight) {
+      onStatus?.call('Scan already running…');
+      return;
     }
+    _scanInFlight = true;
 
-    if (FlutterBluePlus.adapterStateNow != BluetoothAdapterState.on) {
-      await FlutterBluePlus.turnOn();
-    }
+    try {
+      await stopScan();
+      await _respectCooldown(onWait: onStatus);
+      // Extra settle time after stopScan so the stack releases the scanner
+      await Future<void>.delayed(const Duration(milliseconds: 600));
 
-    _scanSub = FlutterBluePlus.scanResults.listen((results) {
-      for (final r in results) {
-        final name = r.advertisementData.advName.isNotEmpty
-            ? r.advertisementData.advName
-            : (r.device.platformName.isNotEmpty ? r.device.platformName : '');
-        if (name.isEmpty) continue;
-        final upper = name.toUpperCase();
-        if (!upper.contains('SH-HLM-PROV') &&
-            !upper.contains('SH-IGN-PROV') &&
-            !upper.contains('HLM-PROV') &&
-            !upper.contains('IGN-PROV')) {
-          continue;
-        }
-        final hit = ProvScanHit(
-          device: r.device,
-          name: name,
-          rssi: r.rssi,
-          kind: _kindFromName(name),
-        );
-        _hits[hit.id] = hit;
+      _hits.clear();
+      onUpdate([]);
+
+      final ok = await ensurePermissions();
+      if (!ok) {
+        throw Exception('Bluetooth / location permission denied');
       }
-      onUpdate(_hits.values.toList()
-        ..sort((a, b) => b.rssi.compareTo(a.rssi)));
-    });
 
-    await FlutterBluePlus.startScan(
-      timeout: timeout,
-      androidUsesFineLocation: true,
-    );
+      if (FlutterBluePlus.adapterStateNow != BluetoothAdapterState.on) {
+        onStatus?.call('Turning Bluetooth on…');
+        await FlutterBluePlus.turnOn();
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+      }
+
+      await _scanSub?.cancel();
+      _scanSub = FlutterBluePlus.scanResults.listen((results) {
+        for (final r in results) {
+          final name = r.advertisementData.advName.isNotEmpty
+              ? r.advertisementData.advName
+              : (r.device.platformName.isNotEmpty ? r.device.platformName : '');
+          if (!_isProvAdvertisement(r, name)) continue;
+
+          final displayName = name.isNotEmpty ? name : 'SH-PROV ${r.device.remoteId.str}';
+          final hit = ProvScanHit(
+            device: r.device,
+            name: displayName,
+            rssi: r.rssi,
+            kind: _kindFromName(displayName),
+          );
+          _hits[hit.id] = hit;
+        }
+        onUpdate(_hits.values.toList()..sort((a, b) => b.rssi.compareTo(a.rssi)));
+      });
+
+      onStatus?.call('Scanning for SH-HLM-PROV / SH-IGN-PROV…');
+
+      Future<void> doStart() async {
+        await FlutterBluePlus.startScan(
+          timeout: timeout,
+          androidUsesFineLocation: true,
+          withServices: [BleProvisionUuids.service],
+          // Also catch named ads if service UUID not in ADV packet
+        );
+      }
+
+      try {
+        await doStart();
+      } catch (e) {
+        final msg = e.toString().toLowerCase();
+        if (msg.contains('frequently') || msg.contains('status=6') || msg.contains('scanner')) {
+          onStatus?.call('Scanner busy — waiting 10s then retrying…');
+          await stopScan();
+          await Future<void>.delayed(const Duration(seconds: 10));
+          // Retry without service filter (some firmwares omit UUID in ADV)
+          await FlutterBluePlus.startScan(
+            timeout: timeout,
+            androidUsesFineLocation: true,
+          );
+        } else {
+          // Fallback: scan everything and filter by name
+          onStatus?.call('Retrying broad BLE scan…');
+          await Future<void>.delayed(const Duration(seconds: 2));
+          await FlutterBluePlus.startScan(
+            timeout: timeout,
+            androidUsesFineLocation: true,
+          );
+        }
+      }
+
+      // If service-filtered scan returned nothing, run one broad pass
+      if (_hits.isEmpty && FlutterBluePlus.isScanningNow) {
+        // wait for timeout path
+      } else if (_hits.isEmpty) {
+        onStatus?.call('No FE20 ads yet — broad scan…');
+        await Future<void>.delayed(const Duration(seconds: 2));
+        try {
+          await FlutterBluePlus.startScan(
+            timeout: const Duration(seconds: 12),
+            androidUsesFineLocation: true,
+          );
+        } catch (_) {}
+      }
+    } finally {
+      _lastScanStopAt = DateTime.now();
+      _scanInFlight = false;
+      onStatus?.call(
+        _hits.isEmpty
+            ? 'Scan finished — no devices. Hold Button B (helmet) 5s for SH-HLM-PROV.'
+            : 'Scan finished — ${_hits.length} device(s).',
+      );
+    }
   }
 
   static Future<void> stopScan() async {
     await _scanSub?.cancel();
     _scanSub = null;
     try {
-      await FlutterBluePlus.stopScan();
+      if (FlutterBluePlus.isScanningNow) {
+        await FlutterBluePlus.stopScan();
+      }
     } catch (_) {}
+    _lastScanStopAt = DateTime.now();
   }
 
   static Future<void> _writeUtf8(BluetoothCharacteristic c, String value) async {
@@ -195,7 +294,6 @@ class BleProvisionService {
     await Future<void>.delayed(const Duration(milliseconds: 80));
   }
 
-  /// Provision one ESP32: Wi-Fi + PSK + paired peer ID, then commit (status=1).
   static Future<void> provisionDevice({
     required BluetoothDevice device,
     required ProvDeviceKind kind,
@@ -205,7 +303,9 @@ class BleProvisionService {
     required String pairedPeerId,
     void Function(String step)? onStep,
   }) async {
-    onStep?.call('Connecting to ${device.platformName.isNotEmpty ? device.platformName : device.remoteId.str}…');
+    onStep?.call(
+      'Connecting to ${device.platformName.isNotEmpty ? device.platformName : device.remoteId.str}…',
+    );
     await device.connect(timeout: const Duration(seconds: 15), autoConnect: false);
     try {
       onStep?.call('Discovering GATT…');
@@ -243,7 +343,6 @@ class BleProvisionService {
     }
   }
 
-  /// Pair both boards with the same Wi-Fi + PSK; cross-write peer IDs.
   static Future<void> pairBoth({
     required ProvScanHit helmet,
     required ProvScanHit ignition,
