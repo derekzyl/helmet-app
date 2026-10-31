@@ -8,7 +8,8 @@ import '../models/telemetry_model.dart';
 class ApiService {
   static const String defaultBaseUrl = 'https://big-mariejeanne-cybergenii-b60e7032.koyeb.app/api/v1';
   static const String defaultWsUrl = 'wss://big-mariejeanne-cybergenii-b60e7032.koyeb.app/api/v1/telemetry/ws';
-  static const String defaultDeviceId = 'HLM-2026-0001';
+  /// Must match a registered cloud serial (see /devices/). Firmware may use HLM-2026-0001.
+  static const String defaultDeviceId = 'HLM-2026';
   static const String defaultRiderName = 'Cybergenii Operator';
   static const String localIgnitionUrl = 'http://192.168.4.1:8080';
 
@@ -33,6 +34,11 @@ class ApiService {
       final prefs = await SharedPreferences.getInstance();
       baseUrl = prefs.getString('api_base_url') ?? defaultBaseUrl;
       activeDeviceId = prefs.getString('active_device_id') ?? defaultDeviceId;
+      // Migrate legacy firmware serial that is not registered in cloud
+      if (activeDeviceId == 'HLM-2026-0001' || activeDeviceId == 'HLM-DEFAULT') {
+        activeDeviceId = defaultDeviceId;
+        await prefs.setString('active_device_id', activeDeviceId);
+      }
       riderName = prefs.getString('rider_name') ?? defaultRiderName;
 
       // Derive WS URL from HTTP Base URL if needed
@@ -103,7 +109,15 @@ class ApiService {
             final json = jsonDecode(data.toString());
             if (json is Map<String, dynamic>) {
               if (json['type'] == 'PONG') return;
-              final point = TelemetryModel.fromJson(json, defaultDeviceId: activeDeviceId);
+              // Hub wraps frames as { type, device_id, data: {...sensors} }
+              final Map<String, dynamic> frame;
+              if (json['data'] is Map) {
+                frame = Map<String, dynamic>.from(json['data'] as Map);
+                frame['device_id'] ??= json['device_id'] ?? activeDeviceId;
+              } else {
+                frame = json;
+              }
+              final point = TelemetryModel.fromJson(frame, defaultDeviceId: activeDeviceId);
               _telemetryStreamController.add(point);
             }
           } catch (_) {}
@@ -150,31 +164,38 @@ class ApiService {
     _isWsConnected = false;
   }
 
+  /// Candidate serials when cloud ID and firmware ID differ (HLM-2026 vs HLM-2026-0001).
+  static List<String> _deviceAliases(String primary) {
+    final ids = <String>{primary, activeDeviceId, defaultDeviceId, 'HLM-2026', 'HLM-2026-0001', 'HLM-0001'};
+    return ids.where((e) => e.trim().isNotEmpty).toList();
+  }
+
   /// REST: Fetch latest telemetry
   static Future<TelemetryModel?> getLatestTelemetry({String? deviceId}) async {
-    final devId = deviceId ?? activeDeviceId;
-    try {
-      final uri = Uri.parse('$baseUrl/telemetry/latest/$devId');
-      final res = await http.get(uri).timeout(const Duration(seconds: 4));
-      if (res.statusCode == 200 && res.body.isNotEmpty && res.body != 'null') {
-        final decoded = jsonDecode(res.body);
-        if (decoded is Map<String, dynamic>) {
-          return TelemetryModel.fromJson(decoded, defaultDeviceId: devId);
-        }
-      }
-    } catch (_) {
-      // Direct local ignition unit fallback
+    final primary = deviceId ?? activeDeviceId;
+    for (final devId in _deviceAliases(primary)) {
       try {
-        final localUri = Uri.parse('$localIgnitionUrl/status');
-        final res = await http.get(localUri).timeout(const Duration(seconds: 2));
-        if (res.statusCode == 200) {
+        final uri = Uri.parse('$baseUrl/telemetry/latest/$devId');
+        final res = await http.get(uri).timeout(const Duration(seconds: 4));
+        if (res.statusCode == 200 && res.body.isNotEmpty && res.body != 'null') {
           final decoded = jsonDecode(res.body);
           if (decoded is Map<String, dynamic>) {
-            return TelemetryModel.fromJson(decoded, defaultDeviceId: devId);
+            return TelemetryModel.fromJson(decoded, defaultDeviceId: primary);
           }
         }
       } catch (_) {}
     }
+    // Direct local ignition SoftAP fallback (phone must be on SH-IGN-*)
+    try {
+      final localUri = Uri.parse('$localIgnitionUrl/status');
+      final res = await http.get(localUri).timeout(const Duration(seconds: 2));
+      if (res.statusCode == 200) {
+        final decoded = jsonDecode(res.body);
+        if (decoded is Map<String, dynamic>) {
+          return TelemetryModel.fromJson(decoded, defaultDeviceId: primary);
+        }
+      }
+    } catch (_) {}
     return null;
   }
 

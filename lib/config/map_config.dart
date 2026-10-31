@@ -1,15 +1,18 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class MapConfig {
+  /// Built-in test Carto key so maps work even if .env failed to load at runtime.
+  static const String _fallbackKey = 'cb1_4yyg_1_0dfda9c767ca5651859c1790';
+
   /// Carto basemap key from --dart-define=MAP_API_KEY=... or app/.env
   static String get apiKey {
     const fromDefine = String.fromEnvironment('MAP_API_KEY', defaultValue: '');
     if (fromDefine.isNotEmpty) return fromDefine;
     try {
-      return dotenv.env['MAP_API_KEY'] ?? '';
-    } catch (_) {
-      return '';
-    }
+      final fromEnv = dotenv.env['MAP_API_KEY'] ?? '';
+      if (fromEnv.isNotEmpty) return fromEnv;
+    } catch (_) {}
+    return _fallbackKey;
   }
 
   static String rasterUrl({bool dark = true}) {

@@ -109,9 +109,9 @@ class TelemetryModel {
         (json['alcohol_level_mg_l'] as num?)?.toDouble() ??
         0.0;
 
-    final batPct = (json['battery_pct'] as num?)?.toInt() ??
-        (json['battery_percentage'] as num?)?.toInt() ??
-        100;
+    final batPct = (json['battery_percentage'] as num?)?.toInt() ??
+        (json['battery_pct'] as num?)?.toInt() ??
+        0;
 
     final batVolt = (json['battery_voltage'] as num?)?.toDouble() ??
         ((json['battery_mv'] as num?) != null

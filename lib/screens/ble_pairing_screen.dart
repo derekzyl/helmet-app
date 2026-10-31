@@ -90,7 +90,7 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
             if (_helmet == null && h != null) _helmet = h;
             if (_ignition == null && i != null) _ignition = i;
             _statusLine = hits.isEmpty
-                ? 'Scanning… Hold Button B on helmet 5s (LED yellow blink = BLE).'
+                ? 'Scanning… Hold Button B 3s until yellow blinks (BLE must be on).'
                 : 'Found ${hits.length} device(s). Select helmet + ignition, then Pair.';
           });
         },
@@ -346,7 +346,7 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                     SizedBox(height: 4),
                     Text(
-                      'Boards auto-advertise BLE after ~20–25s with no link, or hold Button B / Button 2 for 5s.',
+                      'Helmet BLE is OFF until you hold Button B 3s (yellow blink) or SoftAP fails ~12s. Ignition: Button 2 for 5s.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: AppColors.onSurfaceVariant, fontSize: 12),
                     ),

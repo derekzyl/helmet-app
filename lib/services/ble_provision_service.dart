@@ -41,8 +41,8 @@ class BleProvisionService {
   static const String softApOnlySsid = '__SOFTAP__';
   static const String defaultWifiSsid = softApOnlySsid;
   static const String defaultWifiPass = 'helmet1234';
-  static const String defaultHelmetId = 'HLM-2026-0001';
-  static const String defaultIgnitionId = 'IGN-2026-0001';
+  static const String defaultHelmetId = 'HLM-2026';
+  static const String defaultIgnitionId = 'IGN-2026';
 
   /// Android rejects scans started too soon after the previous one (status=6).
   static const Duration scanCooldown = Duration(seconds: 8);
@@ -170,7 +170,7 @@ class BleProvisionService {
   static Future<void> startScan({
     required void Function(List<ProvScanHit> hits) onUpdate,
     void Function(String status)? onStatus,
-    Duration timeout = const Duration(seconds: 15),
+    Duration timeout = const Duration(seconds: 18),
   }) async {
     if (_scanInFlight) {
       onStatus?.call('Scan already running…');
@@ -181,8 +181,8 @@ class BleProvisionService {
     try {
       await stopScan();
       await _respectCooldown(onWait: onStatus);
-      // Extra settle time after stopScan so the stack releases the scanner
-      await Future<void>.delayed(const Duration(milliseconds: 600));
+      // Extra settle so Android releases the previous scanner (avoids status=6)
+      await Future<void>.delayed(const Duration(milliseconds: 800));
 
       _hits.clear();
       onUpdate([]);
@@ -195,7 +195,7 @@ class BleProvisionService {
       if (FlutterBluePlus.adapterStateNow != BluetoothAdapterState.on) {
         onStatus?.call('Turning Bluetooth on…');
         await FlutterBluePlus.turnOn();
-        await Future<void>.delayed(const Duration(milliseconds: 400));
+        await Future<void>.delayed(const Duration(milliseconds: 500));
       }
 
       await _scanSub?.cancel();
@@ -218,60 +218,65 @@ class BleProvisionService {
         onUpdate(_hits.values.toList()..sort((a, b) => b.rssi.compareTo(a.rssi)));
       });
 
-      onStatus?.call('Scanning for SH-HLM-PROV / SH-IGN-PROV…');
+      // Broad scan only — withServices filter misses ESP32 ads that put FE20
+      // only in the scan-response packet on many Xiaomi/MIUI stacks.
+      onStatus?.call(
+        'Scanning… Hold helmet Button B 3s until yellow LED blinks (SH-HLM-PROV).',
+      );
 
-      Future<void> doStart() async {
+      Future<void> runBroadScan(Duration t) async {
         await FlutterBluePlus.startScan(
-          timeout: timeout,
+          timeout: t,
           androidUsesFineLocation: true,
-          withServices: [BleProvisionUuids.service],
-          // Also catch named ads if service UUID not in ADV packet
+          continuousUpdates: true,
+          continuousDivisor: 1,
         );
-      }
-
-      try {
-        await doStart();
-      } catch (e) {
-        final msg = e.toString().toLowerCase();
-        if (msg.contains('frequently') || msg.contains('status=6') || msg.contains('scanner')) {
-          onStatus?.call('Scanner busy — waiting 10s then retrying…');
-          await stopScan();
-          await Future<void>.delayed(const Duration(seconds: 10));
-          // Retry without service filter (some firmwares omit UUID in ADV)
-          await FlutterBluePlus.startScan(
-            timeout: timeout,
-            androidUsesFineLocation: true,
-          );
-        } else {
-          // Fallback: scan everything and filter by name
-          onStatus?.call('Retrying broad BLE scan…');
-          await Future<void>.delayed(const Duration(seconds: 2));
-          await FlutterBluePlus.startScan(
-            timeout: timeout,
-            androidUsesFineLocation: true,
-          );
+        // startScan returns when the scan *starts* — wait for timeout/stop
+        final deadline = DateTime.now().add(t + const Duration(seconds: 1));
+        while (FlutterBluePlus.isScanningNow && DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 250));
         }
       }
 
-      // If service-filtered scan returned nothing, run one broad pass
-      if (_hits.isEmpty && FlutterBluePlus.isScanningNow) {
-        // wait for timeout path
-      } else if (_hits.isEmpty) {
-        onStatus?.call('No FE20 ads yet — broad scan…');
-        await Future<void>.delayed(const Duration(seconds: 2));
-        try {
-          await FlutterBluePlus.startScan(
-            timeout: const Duration(seconds: 12),
-            androidUsesFineLocation: true,
-          );
-        } catch (_) {}
+      try {
+        await runBroadScan(timeout);
+      } catch (e) {
+        final msg = e.toString().toLowerCase();
+        if (msg.contains('frequently') || msg.contains('status=6') || msg.contains('scanner')) {
+          onStatus?.call('Scanner busy — waiting 12s then retrying…');
+          await stopScan();
+          await Future<void>.delayed(const Duration(seconds: 12));
+          await _scanSub?.cancel();
+          _scanSub = FlutterBluePlus.scanResults.listen((results) {
+            for (final r in results) {
+              final name = r.advertisementData.advName.isNotEmpty
+                  ? r.advertisementData.advName
+                  : (r.device.platformName.isNotEmpty ? r.device.platformName : '');
+              if (!_isProvAdvertisement(r, name)) continue;
+              final displayName = name.isNotEmpty ? name : 'SH-PROV ${r.device.remoteId.str}';
+              _hits[r.device.remoteId.str] = ProvScanHit(
+                device: r.device,
+                name: displayName,
+                rssi: r.rssi,
+                kind: _kindFromName(displayName),
+              );
+            }
+            onUpdate(_hits.values.toList()..sort((a, b) => b.rssi.compareTo(a.rssi)));
+          });
+          await runBroadScan(timeout);
+        } else {
+          rethrow;
+        }
       }
     } finally {
+      try {
+        await FlutterBluePlus.stopScan();
+      } catch (_) {}
       _lastScanStopAt = DateTime.now();
       _scanInFlight = false;
       onStatus?.call(
         _hits.isEmpty
-            ? 'Scan finished — no devices. Hold Button B (helmet) 5s for SH-HLM-PROV.'
+            ? 'No SH-HLM-PROV. Helmet BLE is OFF until Button B held 3s (yellow blink) or no SoftAP link ~12s.'
             : 'Scan finished — ${_hits.length} device(s).',
       );
     }
