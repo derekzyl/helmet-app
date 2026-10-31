@@ -38,7 +38,9 @@ class ProvScanHit {
 class BleProvisionService {
   static const String helmetAdv = 'SH-HLM-PROV';
   static const String ignitionAdv = 'SH-IGN-PROV';
-  static const String defaultWifiSsid = 'SmartHelmet_AP';
+  /// SoftAP-only sentinel — boards talk peer-to-peer without phone Wi‑Fi
+  static const String softApOnlySsid = '__SOFTAP__';
+  static const String defaultWifiSsid = softApOnlySsid;
   static const String defaultWifiPass = 'helmet1234';
   static const String defaultHelmetId = 'HLM-2026-0001';
   static const String defaultIgnitionId = 'IGN-2026-0001';

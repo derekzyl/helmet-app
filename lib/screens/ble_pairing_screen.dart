@@ -23,7 +23,8 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
   bool _isPairing = false;
   bool _isProvisioned = false;
   bool _autoConnect = true;
-  bool _showAdvanced = true;
+  bool _softApOnly = true; // peer SoftAP after handshake — no phone Wi‑Fi required
+  bool _showAdvanced = false;
   int _progress = 0;
   String _statusLine = 'Power both boards. LEDs blink while connecting / pairing.';
   String _auditStep = '';
@@ -105,12 +106,16 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
       return;
     }
 
-    final ssid = _ssidController.text.trim().isEmpty
-        ? BleProvisionService.defaultWifiSsid
-        : _ssidController.text.trim();
-    final pass = _passController.text.trim().isEmpty
+    final ssid = _softApOnly
+        ? BleProvisionService.softApOnlySsid
+        : (_ssidController.text.trim().isEmpty
+            ? 'SmartHelmet_AP'
+            : _ssidController.text.trim());
+    final pass = _softApOnly
         ? BleProvisionService.defaultWifiPass
-        : _passController.text.trim();
+        : (_passController.text.trim().isEmpty
+            ? BleProvisionService.defaultWifiPass
+            : _passController.text.trim());
     final helmetId = _helmetIdController.text.trim().isEmpty
         ? BleProvisionService.defaultHelmetId
         : _helmetIdController.text.trim();
@@ -384,9 +389,23 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
             const SizedBox(height: 8),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
+              title: const Text('Peer SoftAP (no phone Wi‑Fi)', style: TextStyle(fontSize: 14)),
+              subtitle: const Text(
+                'After pairing, helmet ↔ ignition talk directly. Ignition works offline.',
+                style: TextStyle(fontSize: 11, color: AppColors.onSurfaceVariant),
+              ),
+              value: _softApOnly,
+              activeThumbColor: AppColors.primary,
+              onChanged: _isPairing ? null : (v) => setState(() {
+                    _softApOnly = v;
+                    _showAdvanced = !v;
+                  }),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
               title: const Text('Default auto-connect', style: TextStyle(fontSize: 14)),
               subtitle: const Text(
-                'Boards reconnect to saved Wi-Fi / SoftAP after reboot',
+                'Boards reconnect SoftAP / Wi‑Fi after reboot',
                 style: TextStyle(fontSize: 11, color: AppColors.onSurfaceVariant),
               ),
               value: _autoConnect,
@@ -416,9 +435,9 @@ class _BlePairingScreenState extends State<BlePairingScreen> {
               TextField(
                 controller: _ssidController,
                 decoration: const InputDecoration(
-                  labelText: 'Wi-Fi SSID (phone hotspot or home AP)',
+                  labelText: 'Shared Wi-Fi SSID (optional cloud monitoring)',
                   filled: true,
-                  helperText: 'Same network for both devices. Leave default for SoftAP fallback.',
+                  helperText: 'Only needed if Peer SoftAP is OFF. SoftAP peer works without this.',
                 ),
               ),
               const SizedBox(height: 8),

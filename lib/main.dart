@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-import 'screens/alerts_screen.dart';
 import 'screens/ble_pairing_screen.dart';
+import 'screens/diagnostics_screen.dart';
 import 'screens/home_cockpit_screen.dart';
-import 'screens/ride_history_screen.dart';
+import 'screens/live_map_screen.dart';
 import 'screens/settings_screen.dart';
 import 'services/api_service.dart';
 import 'services/ble_provision_service.dart';
@@ -12,6 +13,12 @@ import 'theme/theme_controller.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    await dotenv.load(fileName: '.env');
+  } catch (_) {
+    // MAP_API_KEY may come from --dart-define instead
+  }
 
   // Never block first frame on network / prefs / BLE init failures
   try {
@@ -67,8 +74,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   late final List<Widget> _screens = [
     const HomeCockpitScreen(),
     const BlePairingScreen(),
-    const RideHistoryScreen(),
-    const AlertsScreen(),
+    const DiagnosticsScreen(),
+    const LiveMapScreen(),
     const SettingsScreen(),
   ];
 
@@ -100,15 +107,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.bluetooth_searching),
-            label: 'BLE Pair',
+            label: 'Pair',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.route),
-            label: 'Trips',
+            icon: Icon(Icons.health_and_safety),
+            label: 'Diag',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.warning_amber),
-            label: 'Alerts',
+            icon: Icon(Icons.map),
+            label: 'Map',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.tune),

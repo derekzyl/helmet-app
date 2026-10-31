@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../models/telemetry_model.dart';
 import '../services/api_service.dart';
+import '../widgets/connectivity_status_card.dart';
 import 'breathalyzer_modal.dart';
 import 'pre_ride_check_screen.dart';
 
@@ -186,6 +187,12 @@ class _HomeCockpitScreenState extends State<HomeCockpitScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    ConnectivityStatusCard(
+                      telemetry: current,
+                      cloudWsLive: _isWsActive,
+                    ),
+                    const SizedBox(height: 16),
+
                     // Standby / Connection info banner if awaiting telemetry
                     if (!isLive) ...[
                       Container(

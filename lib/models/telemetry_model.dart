@@ -10,6 +10,27 @@ class TelemetryModel {
   final double? batteryVoltage;
   final double? impactG;
   final double? tiltDegrees;
+  final double? rollDegrees;
+  final double? pitchDegrees;
+  final double? ax, ay, az, gx, gy, gz;
+  final String imuState;
+  final bool imuAnomaly;
+  final bool tiltWarning;
+  final bool riderUpright;
+  final double? alcoholWarmupPct;
+  final bool alcoholCalibrated;
+  final double? bacRiseRate;
+  final bool alcoholRisingAnomaly;
+  final int? mq3Raw;
+  final bool mq3WarmedUp;
+  final bool gpsFixed;
+  final bool localLinkConnected;
+  final bool internetOk;
+  final bool sharedWifi;
+  final bool preferSoftap;
+  final String wifiMode;
+  final String wifiSsid;
+  final int rssiDbm;
   final String ignitionStatus;
   final String? lockReason;
   final DateTime timestamp;
@@ -27,13 +48,38 @@ class TelemetryModel {
     this.batteryVoltage,
     this.impactG,
     this.tiltDegrees,
+    this.rollDegrees,
+    this.pitchDegrees,
+    this.ax,
+    this.ay,
+    this.az,
+    this.gx,
+    this.gy,
+    this.gz,
+    this.imuState = 'IDLE',
+    this.imuAnomaly = false,
+    this.tiltWarning = false,
+    this.riderUpright = true,
+    this.alcoholWarmupPct,
+    this.alcoholCalibrated = false,
+    this.bacRiseRate,
+    this.alcoholRisingAnomaly = false,
+    this.mq3Raw,
+    this.mq3WarmedUp = false,
+    this.gpsFixed = false,
+    this.localLinkConnected = false,
+    this.internetOk = false,
+    this.sharedWifi = false,
+    this.preferSoftap = true,
+    this.wifiMode = 'NONE',
+    this.wifiSsid = '',
+    this.rssiDbm = -99,
     required this.ignitionStatus,
     this.lockReason,
     required this.timestamp,
     this.isLive = true,
   });
 
-  /// Factory for a clean standby state when awaiting first telemetry packet
   factory TelemetryModel.standby({String deviceId = 'HLM-2026-0001'}) {
     return TelemetryModel(
       deviceId: deviceId,
@@ -76,6 +122,8 @@ class TelemetryModel {
         json['ignition_status']?.toString() ??
         'LOCKED';
 
+    final wifiMode = json['wifi_mode']?.toString() ?? 'NONE';
+
     DateTime parsedTime;
     if (json['recorded_at'] != null) {
       parsedTime = DateTime.tryParse(json['recorded_at'].toString()) ?? DateTime.now();
@@ -103,7 +151,34 @@ class TelemetryModel {
       batteryPercentage: batPct,
       batteryVoltage: batVolt,
       impactG: (json['impact_g'] as num?)?.toDouble(),
-      tiltDegrees: (json['tilt_degrees'] as num?)?.toDouble(),
+      tiltDegrees: (json['tilt_degrees'] as num?)?.toDouble() ?? (json['tilt_deg'] as num?)?.toDouble(),
+      rollDegrees: (json['roll_degrees'] as num?)?.toDouble(),
+      pitchDegrees: (json['pitch_degrees'] as num?)?.toDouble(),
+      ax: (json['ax'] as num?)?.toDouble(),
+      ay: (json['ay'] as num?)?.toDouble(),
+      az: (json['az'] as num?)?.toDouble(),
+      gx: (json['gx'] as num?)?.toDouble(),
+      gy: (json['gy'] as num?)?.toDouble(),
+      gz: (json['gz'] as num?)?.toDouble(),
+      imuState: json['imu_state']?.toString() ?? 'IDLE',
+      imuAnomaly: json['imu_anomaly'] == true,
+      tiltWarning: json['tilt_warning'] == true || json['tilt_warn'] == true,
+      riderUpright: json['rider_upright'] != false,
+      alcoholWarmupPct: (json['alcohol_warmup_pct'] as num?)?.toDouble(),
+      alcoholCalibrated: json['alcohol_calibrated'] == true,
+      bacRiseRate: (json['bac_rise_rate'] as num?)?.toDouble(),
+      alcoholRisingAnomaly: json['alcohol_rising_anomaly'] == true,
+      mq3Raw: (json['mq3_raw'] as num?)?.toInt(),
+      mq3WarmedUp: json['mq3_warm'] == true || json['mq3_warmed_up'] == true,
+      gpsFixed: json['gps_fixed'] == true || json['gps_fix'] == true,
+      localLinkConnected: json['local_link_connected'] == true ||
+          json['link_state']?.toString().toUpperCase() == 'CONNECTED',
+      internetOk: json['internet_ok'] == true,
+      sharedWifi: json['shared_wifi'] == true || wifiMode == 'STA',
+      preferSoftap: json['prefer_softap'] != false,
+      wifiMode: wifiMode,
+      wifiSsid: json['wifi_ssid']?.toString() ?? '',
+      rssiDbm: (json['rssi'] as num?)?.toInt() ?? -99,
       ignitionStatus: ignState,
       lockReason: json['lock_reason']?.toString() ?? (ignState == 'LOCKED' ? 'SAFETY_INTERLOCK' : 'NONE'),
       timestamp: parsedTime,
@@ -181,12 +256,12 @@ class EmergencyContactModel {
   }
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'name': name,
-    'phone_number': phoneNumber,
-    'relationship': relationship,
-    'priority': priority,
-  };
+        'id': id,
+        'name': name,
+        'phone_number': phoneNumber,
+        'relationship': relationship,
+        'priority': priority,
+      };
 }
 
 class DeviceKitModel {
