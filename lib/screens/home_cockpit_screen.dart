@@ -358,13 +358,14 @@ class _HomeCockpitScreenState extends State<HomeCockpitScreen> {
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                 ),
-                                onPressed: () {
-                                  Navigator.push(
+                                onPressed: () async {
+                                  await Navigator.push(
                                     context,
                                     MaterialPageRoute(
                                       builder: (_) => const PreRideCheckScreen(),
                                     ),
                                   );
+                                  if (mounted) _fetchTelemetry();
                                 },
                                 child: const Text(
                                   'START PRE-RIDE CHECK & UNLOCK',
