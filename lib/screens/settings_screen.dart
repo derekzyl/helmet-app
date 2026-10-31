@@ -12,8 +12,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  double _bacThreshold = 0.050;
-  double _impactThreshold = 4.0;
   bool _isOverrideActive = false;
   bool _isTestingConnection = false;
   String? _connectionStatus;
@@ -162,27 +160,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
-  }
-
-  void _syncThresholds() async {
-    final success = await ApiService.updateDeviceConfig(
-      deviceId: ApiService.activeDeviceId,
-      bacLimit: _bacThreshold,
-      impactG: _impactThreshold,
-    );
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            success
-                ? 'Thresholds synchronized with ${ApiService.activeDeviceId} firmware.'
-                : 'Thresholds saved to local profile.',
-            style: const TextStyle(fontFamily: 'JetBrains Mono', color: AppColors.onPrimary),
-          ),
-          backgroundColor: AppColors.primaryContainer,
-        ),
-      );
-    }
   }
 
   @override
@@ -423,110 +400,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             const SizedBox(height: 24),
 
-            Text(
-              'SAFETY INTERLOCK THRESHOLDS',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.outline,
-                fontSize: 11,
-                fontFamily: 'JetBrains Mono',
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // BAC Limit Slider
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
+                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Alcohol Threshold (BAC)',
-                        style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 13),
-                      ),
-                      Text(
-                        '${_bacThreshold.toStringAsFixed(3)}%',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'JetBrains Mono',
-                        ),
-                      ),
-                    ],
-                  ),
-                  Slider(
-                    value: _bacThreshold,
-                    min: 0.02,
-                    max: 0.08,
-                    divisions: 6,
-                    activeColor: Theme.of(context).colorScheme.primary,
-                    inactiveColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    onChanged: (v) => setState(() => _bacThreshold = v),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // Impact G Slider
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Accident Peak Impact (G)',
-                        style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 13),
-                      ),
-                      Text(
-                        '${_impactThreshold.toStringAsFixed(1)} G',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'JetBrains Mono',
-                        ),
-                      ),
-                    ],
-                  ),
-                  Slider(
-                    value: _impactThreshold,
-                    min: 3.0,
-                    max: 6.0,
-                    divisions: 6,
-                    activeColor: Theme.of(context).colorScheme.primary,
-                    inactiveColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    onChanged: (v) => setState(() => _impactThreshold = v),
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: TextButton.icon(
-                      onPressed: _syncThresholds,
-                      icon: const Icon(Icons.sync, size: 16, color: AppColors.primary),
-                      label: const Text(
-                        'SYNC THRESHOLDS TO HELMET',
-                        style: TextStyle(fontFamily: 'JetBrains Mono', fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary),
-                      ),
-                    ),
-                  ),
-                ],
+              child: Text(
+                'Alcohol / impact thresholds are set by the fleet admin on the web dashboard (Devices → Config). This rider app cannot change them.',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 12,
+                  height: 1.35,
+                ),
               ),
             ),
 

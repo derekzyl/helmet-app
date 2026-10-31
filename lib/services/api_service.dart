@@ -11,7 +11,8 @@ class ApiService {
   /// Must match a registered cloud serial (see /devices/). Firmware may use HLM-2026-0001.
   static const String defaultDeviceId = 'HLM-2026';
   static const String defaultRiderName = 'Cybergenii Operator';
-  static const String localIgnitionUrl = 'http://192.168.4.1:8080';
+  /// SoftAP HTTP status (port 80). WS peer link stays on :8080.
+  static const String localIgnitionUrl = 'http://192.168.4.1';
 
   static String baseUrl = defaultBaseUrl;
   static String wsUrl = defaultWsUrl;
@@ -170,9 +171,23 @@ class ApiService {
     return ids.where((e) => e.trim().isNotEmpty).toList();
   }
 
-  /// REST: Fetch latest telemetry
+  /// REST: Fetch latest telemetry — SoftAP live sensors first, then cloud.
   static Future<TelemetryModel?> getLatestTelemetry({String? deviceId}) async {
     final primary = deviceId ?? activeDeviceId;
+
+    // 1) Live SoftAP (phone on SH-IGN-* network) — only path that mirrors PIR/MPU/MQ-3 in peer mode
+    try {
+      final localUri = Uri.parse('$localIgnitionUrl/status');
+      final res = await http.get(localUri).timeout(const Duration(milliseconds: 900));
+      if (res.statusCode == 200 && res.body.isNotEmpty) {
+        final decoded = jsonDecode(res.body);
+        if (decoded is Map<String, dynamic>) {
+          return TelemetryModel.fromJson(decoded, defaultDeviceId: primary, forceLive: true);
+        }
+      }
+    } catch (_) {}
+
+    // 2) Cloud (stale when SoftAP-only helmets have no internet)
     for (final devId in _deviceAliases(primary)) {
       try {
         final uri = Uri.parse('$baseUrl/telemetry/latest/$devId');
@@ -185,17 +200,6 @@ class ApiService {
         }
       } catch (_) {}
     }
-    // Direct local ignition SoftAP fallback (phone must be on SH-IGN-*)
-    try {
-      final localUri = Uri.parse('$localIgnitionUrl/status');
-      final res = await http.get(localUri).timeout(const Duration(seconds: 2));
-      if (res.statusCode == 200) {
-        final decoded = jsonDecode(res.body);
-        if (decoded is Map<String, dynamic>) {
-          return TelemetryModel.fromJson(decoded, defaultDeviceId: primary);
-        }
-      }
-    } catch (_) {}
     return null;
   }
 

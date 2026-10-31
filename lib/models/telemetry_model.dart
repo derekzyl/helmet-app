@@ -100,7 +100,11 @@ class TelemetryModel {
     );
   }
 
-  factory TelemetryModel.fromJson(Map<String, dynamic> json, {String defaultDeviceId = ''}) {
+  factory TelemetryModel.fromJson(
+    Map<String, dynamic> json, {
+    String defaultDeviceId = '',
+    bool? forceLive,
+  }) {
     final devId = json['device_id']?.toString() ??
         json['serial_number']?.toString() ??
         defaultDeviceId;
@@ -182,7 +186,9 @@ class TelemetryModel {
       ignitionStatus: ignState,
       lockReason: json['lock_reason']?.toString() ?? (ignState == 'LOCKED' ? 'SAFETY_INTERLOCK' : 'NONE'),
       timestamp: parsedTime,
-      isLive: true,
+      isLive: forceLive ??
+          (json['live_local'] == true ||
+              DateTime.now().difference(parsedTime).abs() < const Duration(seconds: 20)),
     );
   }
 

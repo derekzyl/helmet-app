@@ -46,11 +46,10 @@ class _HomeCockpitScreenState extends State<HomeCockpitScreen> {
       },
     );
 
-    // Fallback polling every 3 seconds to keep data synced if WS drops
-    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      if (!_isWsActive || _telemetry == null) {
-        _fetchTelemetry();
-      }
+    // Always poll — SoftAP /status is how live PIR/MPU/MQ-3 reach the biker app
+    _pollTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _fetchTelemetry();
+      if (mounted) setState(() => _isWsActive = ApiService.isWsConnected);
     });
   }
 
@@ -63,18 +62,23 @@ class _HomeCockpitScreenState extends State<HomeCockpitScreen> {
 
   Future<void> _fetchTelemetry() async {
     final t = await ApiService.getLatestTelemetry(deviceId: ApiService.activeDeviceId);
-    if (mounted) {
-      setState(() {
-        if (t != null) {
+    if (!mounted) return;
+    setState(() {
+      if (t != null) {
+        // Prefer fresher SoftAP frames over older cloud/WS snapshots
+        final prev = _telemetry;
+        if (prev == null ||
+            t.isLive ||
+            !prev.isLive ||
+            t.timestamp.isAfter(prev.timestamp)) {
           _telemetry = t;
-        } else {
-          // Zeroed standby state when disconnected / no data recorded yet
-          _telemetry ??= TelemetryModel.standby(deviceId: ApiService.activeDeviceId);
         }
-        _isLoading = false;
-        _isWsActive = ApiService.isWsConnected;
-      });
-    }
+      } else {
+        _telemetry ??= TelemetryModel.standby(deviceId: ApiService.activeDeviceId);
+      }
+      _isLoading = false;
+      _isWsActive = ApiService.isWsConnected;
+    });
   }
 
   @override
@@ -132,7 +136,9 @@ class _HomeCockpitScreenState extends State<HomeCockpitScreen> {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          _isWsActive ? 'LIVE WS' : (isLive ? 'LIVE REST' : 'STANDBY'),
+                          _isWsActive && isLive
+                              ? 'LIVE WS'
+                              : (isLive ? 'LIVE LOCAL/REST' : 'CLOUD STALE'),
                           style: TextStyle(
                             color: _isWsActive
                                 ? AppColors.primary
