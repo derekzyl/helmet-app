@@ -167,7 +167,13 @@ class ApiService {
 
   /// Candidate serials when cloud ID and firmware ID differ (HLM-2026 vs HLM-2026-0001).
   static List<String> _deviceAliases(String primary) {
-    final ids = <String>{primary, activeDeviceId, defaultDeviceId, 'HLM-2026', 'HLM-2026-0001', 'HLM-0001'};
+    final ids = <String>{
+      primary,
+      activeDeviceId,
+      defaultDeviceId,
+      'HLM-2026-0001',
+      'HLM-0001',
+    };
     return ids.where((e) => e.trim().isNotEmpty).toList();
   }
 
