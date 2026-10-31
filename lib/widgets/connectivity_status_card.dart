@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/telemetry_model.dart';
 import '../theme/app_theme.dart';
 
-/// Shows Local SoftAP link, shared Wi‑Fi, and internet for helmet (+ ignition when known).
+/// Dual-device link card: Helmet, Ignition, peer SoftAP, and cloud/backend.
 class ConnectivityStatusCard extends StatelessWidget {
   const ConnectivityStatusCard({
     super.key,
@@ -15,63 +15,122 @@ class ConnectivityStatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final localOk = telemetry.localLinkConnected;
-    final sharedWifi = telemetry.sharedWifi || telemetry.wifiMode == 'STA';
-    final internet = telemetry.internetOk || cloudWsLive;
+    final peerOk = telemetry.localLinkConnected;
+    final helmetCloud = telemetry.internetOk;
+    final appCloud = cloudWsLive || telemetry.isLive;
+    // Ignition is "up" when SoftAP status answered or peer heartbeats are flowing
+    final ignitionOk = peerOk ||
+        telemetry.wifiMode == 'SOFTAP' ||
+        (telemetry.lockReason != null && telemetry.lockReason != 'AWAITING_TELEMETRY');
+    final helmetOk = peerOk || telemetry.isLive || telemetry.batteryPercentage > 0;
+    final bothOk = peerOk;
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.surfaceLow,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.outlineVariant),
+        border: Border.all(
+          color: bothOk
+              ? AppColors.primary.withValues(alpha: 0.45)
+              : AppColors.outlineVariant,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'LINK STATUS',
-            style: TextStyle(
-              fontFamily: 'JetBrains Mono',
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              color: AppColors.outline,
-            ),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'DEVICE LINK STATUS',
+                  style: TextStyle(
+                    fontFamily: 'JetBrains Mono',
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.outline,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: bothOk
+                      ? AppColors.primaryContainer.withValues(alpha: 0.2)
+                      : AppColors.surfaceContainer,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  bothOk ? 'BOTH LINKED' : 'NOT PAIRED LIVE',
+                  style: TextStyle(
+                    fontFamily: 'JetBrains Mono',
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: bothOk ? AppColors.primary : AppColors.outline,
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
+          _row(
+            Icons.sports_motorsports,
+            'Helmet unit',
+            helmetOk ? 'SEEN' : 'OFFLINE',
+            helmetOk,
+            subtitle: helmetOk
+                ? 'LED: green = peer · green+yellow = peer+cloud'
+                : 'No helmet telemetry yet',
+          ),
+          const SizedBox(height: 8),
+          _row(
+            Icons.electrical_services,
+            'Ignition unit',
+            ignitionOk ? 'SEEN' : 'OFFLINE',
+            ignitionOk,
+            subtitle: ignitionOk
+                ? 'LED: solid green when helmet heartbeat OK'
+                : 'Power ignition SoftAP / wait for link',
+          ),
+          const SizedBox(height: 8),
           _row(
             Icons.link,
-            'Helmet ↔ Ignition (SoftAP / local)',
-            localOk ? 'CONNECTED' : 'NO LINK',
-            localOk,
-            subtitle: localOk
-                ? 'Ignition interlock can arm without phone or internet'
-                : 'Waiting for peer SoftAP / heartbeat',
+            'Helmet ↔ Ignition (SoftAP peer)',
+            peerOk ? 'CONNECTED' : 'NO LINK',
+            peerOk,
+            subtitle: peerOk
+                ? 'Interlock path live — both LEDs should be green'
+                : 'Helmet must join SH-IGN-* SoftAP',
           ),
           const SizedBox(height: 8),
           _row(
-            Icons.wifi,
-            'Shared Wi‑Fi (both devices)',
-            sharedWifi ? 'ON LAN' : (telemetry.wifiMode == 'SOFTAP' ? 'PEER ONLY' : 'OFF'),
-            sharedWifi,
-            subtitle: sharedWifi
-                ? (telemetry.wifiSsid.isNotEmpty ? telemetry.wifiSsid : 'Infrastructure STA')
-                : 'Not required for ignition — SoftAP peer is enough',
+            Icons.cloud_upload_outlined,
+            'Helmet → backend (sensor upload)',
+            helmetCloud ? 'UPLOADING' : 'NOT UPLOADING',
+            helmetCloud,
+            subtitle: helmetCloud
+                ? 'Live PIR/MPU/MQ-3/GPS reaching cloud'
+                : peerOk
+                    ? 'SoftAP peer has no internet — join SH-IGN-* on phone or use shared Wi‑Fi'
+                    : 'No peer / no STA internet on helmet',
           ),
           const SizedBox(height: 8),
           _row(
-            Icons.cloud_done_outlined,
-            'Internet / cloud telemetry',
-            internet ? 'ONLINE' : 'OFFLINE',
-            internet,
-            subtitle: internet
-                ? 'App & dashboard receiving live frames'
-                : 'Local safety still works offline',
+            Icons.phone_android,
+            'App → backend (WS / REST)',
+            appCloud ? 'ONLINE' : 'OFFLINE',
+            appCloud,
+            subtitle: appCloud
+                ? 'Phone cloud link OK (≠ helmet sensors unless helmet uploads)'
+                : 'Check phone internet / API URL',
           ),
           if (telemetry.wifiMode.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
-              'Mode: ${telemetry.wifiMode} · RSSI ${telemetry.rssiDbm} dBm',
+              'Mode ${telemetry.wifiMode}'
+              '${telemetry.wifiSsid.isNotEmpty ? " · ${telemetry.wifiSsid}" : ""}'
+              ' · RSSI ${telemetry.rssiDbm} dBm'
+              '${telemetry.isLive ? " · LIVE" : " · STALE"}',
               style: const TextStyle(fontFamily: 'JetBrains Mono', fontSize: 10, color: AppColors.outline),
             ),
           ],

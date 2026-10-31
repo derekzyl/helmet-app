@@ -177,6 +177,31 @@ class ApiService {
     return ids.where((e) => e.trim().isNotEmpty).toList();
   }
 
+  static DateTime? _lastBridgeAt;
+
+  /// SoftAP peer kits have no internet — when the phone can reach SoftAP *and*
+  /// still has cloud access (cellular), push live sensors to the backend.
+  static Future<void> _bridgeSoftApToCloud(Map<String, dynamic> local) async {
+    final now = DateTime.now();
+    if (_lastBridgeAt != null && now.difference(_lastBridgeAt!) < const Duration(seconds: 2)) {
+      return;
+    }
+    _lastBridgeAt = now;
+    try {
+      final body = Map<String, dynamic>.from(local);
+      body['device_id'] = body['device_id'] ?? activeDeviceId;
+      body['timestamp'] = now.millisecondsSinceEpoch ~/ 1000;
+      body.remove('live_local');
+      body.remove('hb_age_ms');
+      final uri = Uri.parse('$baseUrl/telemetry/ingest');
+      await http
+          .post(uri, headers: {'Content-Type': 'application/json'}, body: jsonEncode(body))
+          .timeout(const Duration(seconds: 3));
+    } catch (_) {
+      // SoftAP often kills cellular — bridge is best-effort
+    }
+  }
+
   /// REST: Fetch latest telemetry — SoftAP live sensors first, then cloud.
   static Future<TelemetryModel?> getLatestTelemetry({String? deviceId}) async {
     final primary = deviceId ?? activeDeviceId;
@@ -188,6 +213,13 @@ class ApiService {
       if (res.statusCode == 200 && res.body.isNotEmpty) {
         final decoded = jsonDecode(res.body);
         if (decoded is Map<String, dynamic>) {
+          // SoftAP returns millis timestamp — stamp "now" so isLive stays true
+          decoded['recorded_at'] = DateTime.now().toUtc().toIso8601String();
+          decoded['live_local'] = true;
+          decoded['local_link_connected'] = decoded['local_link_connected'] ?? true;
+          // Fire-and-forget bridge so dashboard also sees real sensors
+          // ignore: unawaited_futures
+          _bridgeSoftApToCloud(decoded);
           return TelemetryModel.fromJson(decoded, defaultDeviceId: primary, forceLive: true);
         }
       }
