@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../theme/theme_controller.dart';
 import '../services/api_service.dart';
-import '../main.dart';
 import 'contacts_screen.dart';
 
 class SettingsScreen extends StatefulWidget {

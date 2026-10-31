@@ -1,0 +1,35 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "HelmGuard (debug, HyperOS-safe)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "flutterMode": "debug",
+      "args": [
+        "--no-enable-impeller",
+        "--no-dds"
+      ],
+      "toolArgs": [
+        "--no-enable-impeller",
+        "--no-dds"
+      ]
+    },
+    {
+      "name": "HelmGuard (profile)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "flutterMode": "profile",
+      "args": ["--no-enable-impeller"]
+    },
+    {
+      "name": "HelmGuard (release)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "flutterMode": "release"
+    }
+  ]
+}
